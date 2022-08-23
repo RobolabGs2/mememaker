@@ -1,0 +1,27 @@
+{
+	"name": "mememaker",
+	"version": "0.0.0",
+	"description": "Web app for create memes",
+	"scripts": {
+		"start": "parcel index.html",
+		"build": "parcel build index.html --public-url ./",
+		"format": "prettier --check .",
+		"format:fix": "prettier --write .",
+		"lint": "eslint . --ext .ts",
+		"lint:fix": "npm run lint --fix",
+		"fix": "npm run format:fix && npm run lint:fix"
+	},
+	"author": "RobolabGs2",
+	"license": "MIT",
+	"private": "true",
+	"devDependencies": {
+		"@typescript-eslint/eslint-plugin": "^5.34.0",
+		"@typescript-eslint/parser": "^5.34.0",
+		"eslint": "^8.22.0",
+		"eslint-config-prettier": "^8.5.0",
+		"eslint-plugin-prettier": "^4.2.1",
+		"parcel": "^2.7.0",
+		"prettier": "^2.7.1",
+		"typescript": "^4.7.4"
+	}
+}

@@ -1,0 +1,16 @@
+{
+	"compilerOptions": {
+		"strict": true,
+		"module": "commonjs",
+		"target": "es5",
+		"esModuleInterop": true,
+		"allowSyntheticDefaultImports": true,
+		"isolatedModules": true,
+		"outDir": "dist",
+		"sourceMap": true,
+		"resolveJsonModule": true,
+		"lib": ["dom", "es6", "scripthost", "es2015.collection", "es2019"],
+		"downlevelIteration": true
+	},
+	"include": ["./src/**/*", "scenes"]
+}
