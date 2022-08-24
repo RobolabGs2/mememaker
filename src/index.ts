@@ -1,5 +1,6 @@
 import * as HTML from "./html";
-import placeholderURL from "../assets/placeholder.png";
+import placeholderURL from "../assets/empty/placeholder.jpg";
+import placeholderRuURL from "../assets/empty/placeholder_ru.jpg";
 import downloadingURL from "../assets/downloading.png";
 import { downloadImage, downloadImages } from "./http_helpers";
 import JSZip from "jszip";
@@ -16,8 +17,8 @@ class App {
 	}
 	private textInput: HTMLTextAreaElement;
 	private framesListContainer: HTMLElement;
-	constructor(private placeholders: Record<"downloading" | "empty", HTMLImageElement>) {
-		this.activeFrame = new Frame(placeholders.empty, "Hello memes! WRITE TEXT ========>", "Impact");
+	constructor(private placeholders: Record<"downloading" | "empty", HTMLImageElement[]>) {
+		this.activeFrame = new Frame(randomFrom(placeholders.empty), "Hello memes! WRITE TEXT ========>", "Impact");
 		this.frames = [this.activeFrame];
 		setTimeout(() => this.setFrames(this.frames));
 		const canvas = document.querySelector("canvas")!;
@@ -59,7 +60,7 @@ class App {
 				}
 				const reader = new FileReader();
 				const frame = this.activeFrame;
-				frame.image = placeholders.downloading;
+				frame.image = randomFrom(placeholders.downloading);
 				frame.draw(this.ctx);
 				reader.addEventListener("load", ev => {
 					downloadImage(reader.result as string).then(img => {
@@ -82,7 +83,7 @@ class App {
 				const file = item.getAsFile()!;
 				const reader = new FileReader();
 				const frame = this.activeFrame;
-				frame.image = placeholders.downloading;
+				frame.image = randomFrom(placeholders.downloading);
 				frame.draw(this.ctx);
 				reader.addEventListener("load", ev => {
 					downloadImage(reader.result as string).then(img => {
@@ -108,7 +109,7 @@ class App {
 					continue;
 				}
 				const reader = new FileReader();
-				this.addFrame(placeholders.downloading);
+				this.addFrame(randomFrom(placeholders.downloading));
 				const frame = this.frames[this.frames.length - 1];
 				reader.addEventListener("load", ev => {
 					downloadImage(reader.result as string).then(img => {
@@ -130,9 +131,9 @@ class App {
 				}
 				const reader = new FileReader();
 				const frame = this.activeFrame;
-				frame.image = placeholders.downloading;
+				frame.image = randomFrom(placeholders.downloading);
 				frame.draw(this.ctx);
-				reader.addEventListener("load", ev => {
+				reader.addEventListener("load", () => {
 					downloadImage(reader.result as string).then(img => {
 						frame.image = img;
 						frame.draw(this.ctx);
@@ -146,12 +147,14 @@ class App {
 		const zipCtx = zipCanvas.getContext("2d");
 		HTML.CreateElement(
 			"button",
+			HTML.SetText("Download rendered meme"),
 			HTML.AddEventListener("click", () => {
 				const zip = new JSZip();
+				const maxDigitsCount = this.frames.length.toString().length;
 				this.frames.forEach((frame, index) => {
 					const src = frame.preview!.src;
 					const b = src.substring(src.indexOf("base64,") + 7);
-					zip.file(`${index}.png`, b, { base64: true });
+					zip.file(`${(index + 1).toString().padStart(maxDigitsCount, "0")}.png`, b, { base64: true });
 				});
 				zip.generateAsync({ type: "blob" }).then(blob => {
 					const a = document.createElement("a");
@@ -162,12 +165,12 @@ class App {
 					document.body.removeChild(a);
 				});
 			}),
-			HTML.SetText("Download rendered meme"),
 			HTML.AppendTo(properties)
 		);
 
 		HTML.CreateElement(
 			"button",
+			HTML.SetText("Download csv script"),
 			HTML.AddEventListener("click", () => {
 				const blob = new Blob([this.frames.map(frame => `"${frame.text.replace(/"/g, '""')}"`).join("\n")], {
 					type: "text/csv",
@@ -179,11 +182,11 @@ class App {
 				a.click();
 				document.body.removeChild(a);
 			}),
-			HTML.SetText("Download csv script"),
 			HTML.AppendTo(properties)
 		);
 		HTML.CreateElement(
 			"button",
+			HTML.SetText("Download meme project"),
 			HTML.AddEventListener("click", () => {
 				const zip = new JSZip();
 				const text = new Array<string>();
@@ -206,7 +209,6 @@ class App {
 					document.body.removeChild(a);
 				});
 			}),
-			HTML.SetText("Download meme project"),
 			HTML.AppendTo(properties)
 		);
 
@@ -248,8 +250,27 @@ class App {
 			HTML.SetText("Open meme project"),
 			HTML.AppendTo(properties)
 		);
+
+		document.addEventListener("keydown", ev => {
+			if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLTextAreaElement) {
+				return;
+			}
+			if (ev.code === "ArrowRight") {
+				const current = this.activeFrame;
+				const next = this.frames[(this.frames.findIndex(x => x === current) + 1) % this.frames.length];
+				this.setActive(next);
+				return;
+			}
+			if (ev.code === "ArrowLeft") {
+				const current = this.activeFrame;
+				const next =
+					this.frames[(this.frames.findIndex(x => x === current) + this.frames.length - 1) % this.frames.length];
+				this.setActive(next);
+				return;
+			}
+		});
 	}
-	addFrame(img: HTMLImageElement = this.placeholders.empty): HTMLElement {
+	addFrame(img: HTMLImageElement = randomFrom(this.placeholders.empty)): HTMLElement {
 		const newFrame = new Frame(img, "", "Impact");
 		this.frames.push(newFrame);
 		const elem = this.createFrameView(newFrame);
@@ -320,16 +341,31 @@ class App {
 
 downloadImages({
 	placeholder: placeholderURL,
+	placeholderRu: placeholderRuURL,
 	downloadingPlaceholder: downloadingURL,
-}).then(({ placeholder, downloadingPlaceholder }) => {
-	const app = new App({ downloading: downloadingPlaceholder, empty: placeholder });
+}).then(({ placeholder, placeholderRu, downloadingPlaceholder }) => {
+	new App({ downloading: [downloadingPlaceholder], empty: [placeholder, placeholderRu] });
 });
+
+function randomFrom<T>(arr: T[]): T {
+	return arr[Math.floor(arr.length * Math.random())];
+}
 
 class Frame {
 	constructor(public image: HTMLImageElement, public text: string, public font: string) {}
 	public preview?: HTMLImageElement; // TODO: think about it again
 	draw(ctx: CanvasRenderingContext2D) {
 		const { image: img, text, font } = this;
+		const lines = text.split("\n");
+		let maxLine = lines[0];
+		let maxWidth = 0;
+		lines.forEach(line => {
+			const width = ctx.measureText(line).width;
+			if (width > maxWidth) {
+				maxLine = line;
+				maxWidth = width;
+			}
+		});
 		ctx.canvas.width = img.width;
 		ctx.canvas.height = img.height;
 		ctx.drawImage(img, 0, 0);
@@ -337,24 +373,31 @@ class Frame {
 		ctx.strokeStyle = "#000000";
 		ctx.textAlign = "center";
 		const x = img.width / 2;
-		ctx.lineWidth = 12;
 		ctx.lineJoin = "round";
 		ctx.miterLimit = 2;
-		const fontSize = calcTextWidth(ctx, text, font);
-		const y = img.height - fontSize / 1.5;
-		ctx.strokeText(text, x, y);
-		ctx.fillText(text, x, y);
+		const fontSize = calcTextWidth(ctx, maxLine, font, lines.length);
+		const testString = "ЙДЁ";
+		const testParams = ctx.measureText(testString);
+		const fullHeight = testParams.actualBoundingBoxAscent + testParams.actualBoundingBoxDescent;
+		const y = img.height - fontSize / (1.5 + lines.length * 0.5);
+		lines.forEach((line, i) => {
+			const ly = y - (lines.length - i - 1) * fullHeight;
+			ctx.lineWidth = 12;
+			ctx.strokeText(line, x, ly);
+			ctx.fillText(line, x, ly);
+		});
 		if (this.preview) {
 			this.preview.src = ctx.canvas.toDataURL();
 		}
 	}
 }
 
-function calcTextWidth(ctx: CanvasRenderingContext2D, txt: string, font: string): number {
+function calcTextWidth(ctx: CanvasRenderingContext2D, txt: string, font: string, linesCount: number): number {
 	const memeWidth = ctx.canvas.width;
 	const memeHeight = ctx.canvas.height;
 	const initialFontSize = memeHeight * 0.1;
-	const maxHeight = memeHeight * 0.3;
+	const maxHeight = Math.min(memeHeight * 0.16, (memeHeight * 0.34) / linesCount);
+	// const maxHeight = memeHeight * 0.16;
 	let fontSize = initialFontSize;
 	// TODO: optimization
 	for (let i = 0; i < 500; i++) {
@@ -362,11 +405,11 @@ function calcTextWidth(ctx: CanvasRenderingContext2D, txt: string, font: string)
 		const { width: textWidth } = ctx.measureText(txt);
 		const percent = textWidth / memeWidth;
 		// console.log(memeWidth, textWidth, percent, fontSize);
-		if (percent > 0.95) {
+		if (percent > 0.97) {
 			fontSize -= 1;
 			continue;
 		}
-		if (percent < 0.9 && fontSize < maxHeight) {
+		if (percent < 0.96 && fontSize < maxHeight) {
 			fontSize += 1;
 			continue;
 		}
