@@ -12,5 +12,5 @@
 		"lib": ["dom", "es6", "scripthost", "es2015.collection", "es2019"],
 		"downlevelIteration": true
 	},
-	"include": ["./src/**/*", "scenes"]
+	"include": ["./src/**/*"]
 }

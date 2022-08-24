@@ -17,11 +17,16 @@
 	"devDependencies": {
 		"@typescript-eslint/eslint-plugin": "^5.34.0",
 		"@typescript-eslint/parser": "^5.34.0",
+		"buffer": "^6.0.3",
 		"eslint": "^8.22.0",
 		"eslint-config-prettier": "^8.5.0",
 		"eslint-plugin-prettier": "^4.2.1",
 		"parcel": "^2.7.0",
 		"prettier": "^2.7.1",
+		"process": "^0.11.10",
 		"typescript": "^4.7.4"
+	},
+	"dependencies": {
+		"jszip": "^3.10.1"
 	}
 }

@@ -16,10 +16,68 @@
 				height: 100%;
 				background: black;
 			}
+			article {
+				display: flex;
+				height: 100%;
+			}
+			#display {
+				flex: 6;
+			}
+			canvas {
+				width: 100%;
+			}
+			#properties {
+				flex: 2;
+				border-left: white 1px solid;
+				color: whitesmoke;
+			}
+			#properties > * {
+				width: 100%;
+				box-sizing: border-box;
+				margin-bottom: 8px;
+				min-height: 32px;
+			}
+			#frames {
+				flex: 1;
+				border-right: white 1px solid;
+				display: flex;
+				flex-direction: column;
+			}
+			#list {
+				display: flex;
+				flex-direction: column;
+				max-width: 100%;
+				overflow-y: auto;
+			}
+			#list .frame-preview {
+				display: flex;
+				flex-direction: column;
+				cursor: pointer;
+				margin-top: 8px;
+				height: auto;
+			}
+			.frame-preview img {
+				width: 100%;
+				height: auto;
+				object-fit: contain;
+			}
+			.frame-preview footer {
+				width: 100%;
+				height: 20px;
+				display: flex;
+			}
+			footer button {
+				flex: 1;
+			}
 		</style>
 	</head>
 
 	<body>
 		<script src="./src/index.ts" type="module"></script>
+		<article>
+			<section id="frames"></section>
+			<section id="display"><canvas></canvas></section>
+			<section id="properties"></section>
+		</article>
 	</body>
 </html>
