@@ -276,9 +276,11 @@ export class Frame {
 		ctx.drawImage(img, 0, 0);
 		// TODO update on change text
 		this.textContent.text = this.text;
-		this.textContent.box.height = Math.min(
-			this.image.height * 0.16 * this.text.split("\n").length,
-			this.image.height * 0.34
+		this.textContent.box = new ContentBox(
+			this.image.width / 2,
+			this.image.height - (this.image.height * 0.34) / 2,
+			this.image.width * 0.97,
+			Math.min(this.image.height * 0.16 * this.text.split("\n").length, this.image.height * 0.34)
 		);
 		this.textContent.draw(ctx, brushManager);
 		if (this.preview) {
