@@ -86,9 +86,11 @@ export function CreateSwitcher(
 
 export function CreateSelector<T extends string, K extends T>(
 	defaultKey: K,
-	options: Record<T, string>,
-	onChange: (value: T) => void
+	options: Record<string, T> | T[],
+	onChange: (value: T) => void,
+	...modifications: ((t: HTMLSelectElement) => void)[]
 ) {
+	const isArray = Array.isArray(options);
 	return CreateElement(
 		"select",
 		AddEventListener("change", function () {
@@ -99,14 +101,14 @@ export function CreateSelector<T extends string, K extends T>(
 			}
 		}),
 		Append(
-			...Object.entries(options).map(([value, text]) =>
+			...(isArray ? options.map(v => [v, v]) : Object.entries(options)).map(([text, value]) =>
 				CreateElement("option", SetText(text as string), el => (el.value = value))
 			)
 		),
 		el => {
-			el.selectedIndex = Object.keys(options).findIndex(k => k === defaultKey);
-			onChange(defaultKey);
-		}
+			el.selectedIndex = (isArray ? options : Object.keys(options)).findIndex(k => k === defaultKey);
+		},
+		...modifications
 	);
 }
 

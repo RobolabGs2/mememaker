@@ -3,6 +3,7 @@
 	<head>
 		<title>Mememaker</title>
 		<link rel="icon" href="./assets/favicon.png" />
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lobster" />
 		<meta charset="UTF-8" />
 		<style>
 			* {
@@ -16,7 +17,7 @@
 				height: 100%;
 				background: black;
 			}
-			article {
+			body > article {
 				display: flex;
 				height: 100%;
 			}
@@ -30,6 +31,10 @@
 				flex: 2;
 				border-left: white 1px solid;
 				color: whitesmoke;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: flex-start;
 			}
 			#properties > * {
 				width: 100%;
@@ -42,6 +47,8 @@
 				border-right: white 1px solid;
 				display: flex;
 				flex-direction: column;
+				height: 100%;
+				justify-content: space-between;
 			}
 			#list {
 				display: flex;

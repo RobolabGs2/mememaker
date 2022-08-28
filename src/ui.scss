@@ -1,0 +1,56 @@
+.text-settings {
+	&__panel {
+		display: flex;
+		height: 32px;
+		justify-content: flex-start;
+		& > * {
+			flex: 1;
+		}
+		& > button,
+		& > select,
+		& > input {
+			border: none;
+			border-left: 1px solid #dddddd;
+		}
+	}
+	&__stack {
+		display: flex;
+		flex-direction: column;
+		margin-bottom: 16px;
+	}
+}
+
+.switcher-button {
+	&__button {
+		height: 100%;
+		width: 100%;
+		font-family: monospace;
+		cursor: pointer;
+		background-color: white;
+		&:hover {
+			background-color: #eeeeee;
+		}
+		flex: 1;
+		&_enabled_true {
+			background-color: #aaeeee;
+			&:hover {
+				background-color: #9adede;
+			}
+		}
+	}
+}
+
+.point-input {
+	&__container {
+		justify-content: flex-end;
+		align-content: center;
+		align-items: center;
+		height: 32px;
+		display: flex;
+	}
+	&__input {
+		width: 64px;
+		height: 100%;
+		border: none;
+	}
+}

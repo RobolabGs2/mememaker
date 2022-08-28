@@ -1,14 +1,18 @@
 /*
-    Typescript не умеет импротить произвольные файлы, это делает сборкщик (parcel)
-    Для тайпчекера объявим, что модули с картинками - это нормально
+	Typescript не умеет импротить произвольные файлы, это делает сборщик (parcel)
+	Для тайпчекера объявим, что модули с картинками - это нормально
 */
+
+type RecursiveRecord<T> = T | { [key: string]: RecursiveRecord<T> };
+type ParcelBlobURLs = RecursiveRecord<string>;
+
 declare module "*.png" {
-	const value: string;
+	const value: ParcelBlobURLs;
 	export = value;
 }
 
 declare module "*.jpg" {
-	const value: string;
+	const value: ParcelBlobURLs;
 	export = value;
 }
 

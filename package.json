@@ -5,6 +5,8 @@
 	"scripts": {
 		"start": "parcel index.html",
 		"build": "parcel build index.html --public-url ./",
+		"build:scss-types": "typed-scss-modules src --nameFormat none --exportType default",
+		"watch:scss-types": "typed-scss-modules src --nameFormat none --exportType default --watch",
 		"format": "prettier --check .",
 		"format:fix": "prettier --write .",
 		"lint": "eslint . --ext .ts",
@@ -15,6 +17,8 @@
 	"license": "MIT",
 	"private": "true",
 	"devDependencies": {
+		"@parcel/resolver-glob": "^2.7.0",
+		"@parcel/transformer-sass": "^2.7.0",
 		"@typescript-eslint/eslint-plugin": "^5.34.0",
 		"@typescript-eslint/parser": "^5.34.0",
 		"buffer": "^6.0.3",
@@ -24,9 +28,15 @@
 		"parcel": "^2.7.0",
 		"prettier": "^2.7.1",
 		"process": "^0.11.10",
+		"typed-scss-modules": "^6.5.0",
 		"typescript": "^4.7.4"
 	},
 	"dependencies": {
 		"jszip": "^3.10.1"
+	},
+	"@parcel/transformer-css": {
+		"cssModules": {
+			"global": true
+		}
 	}
 }

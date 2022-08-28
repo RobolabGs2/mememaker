@@ -12,10 +12,53 @@ export function downloadImage(url: string): Promise<HTMLImageElement> {
 	});
 }
 
+export function downloadImagesParcel<T extends ParcelBlobURLs>(urlsMap: T): Promise<RecursiveRecord<HTMLImageElement>> {
+	if (typeof urlsMap === "string") {
+		return downloadImage(urlsMap);
+	}
+	return downloadImagesArray(flatRecursiveRecordEntries(urlsMap)).then(recursiveRecordFromEntries);
+}
+
+export function downloadImagesParcelRecord<T extends string>(
+	urlsMap: Record<T, ParcelBlobURLs>
+): Promise<Record<T, RecursiveRecord<HTMLImageElement>>> {
+	return downloadImagesArray(flatRecursiveRecordEntries(urlsMap as RecursiveRecord<T>)).then(
+		recursiveRecordFromEntries
+	) as Promise<Record<T, RecursiveRecord<HTMLImageElement>>>;
+}
+
+function flatRecursiveRecordEntries<T>(r: RecursiveRecord<T>, delimiter = ">"): [string, T][] {
+	return Object.entries(r)
+		.map(([key, rr]: [string, T]) => {
+			if (typeof rr !== "object") return [[key, rr]] as [string, T][];
+			return flatRecursiveRecordEntries(rr).map(([innerKey, value]) => [`${key}${delimiter}${innerKey}`, value]);
+		})
+		.flat(1) as [string, T][];
+}
+
+function recursiveRecordFromEntries<T>(entries: [string, T][], delimiter = ">"): RecursiveRecord<T> {
+	return entries.reduce((acc, [key, value]) => {
+		const keys = key.split(delimiter);
+		if (keys.length === 1) {
+			acc[key] = value;
+			return acc;
+		}
+		keys.slice(0, -1).reduce((obj, partOfKey) => {
+			if (!obj[partOfKey]) obj[partOfKey] = {};
+			return obj[partOfKey] as Record<string, RecursiveRecord<T>>;
+		}, acc)[keys[keys.length - 1]] = value;
+		return acc;
+	}, {} as Record<string, RecursiveRecord<T>>);
+}
+
 export function downloadImages<T extends string>(urlsMap: Record<T, string>): Promise<Record<T, HTMLImageElement>> {
-	const urls = Object.entries<string>(urlsMap);
+	const urls = Object.entries<string>(urlsMap) as [T, string][];
+	return downloadImagesArray(urls).then(Object.fromEntries);
+}
+
+export function downloadImagesArray<T>(urls: [T, string][]): Promise<[T, HTMLImageElement][]> {
 	return Promise.all(urls.map(([, url]) => url).map(downloadImage)).then(
-		images => Object.fromEntries(images.map((img, i) => [urls[i][0], img])) as Record<T, HTMLImageElement>
+		images => images.map((img, i) => [urls[i][0], img]) as [T, HTMLImageElement][]
 	);
 }
 
