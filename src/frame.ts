@@ -1,3 +1,5 @@
+import { DrawContext } from "./app";
+
 export interface BrushPath {
 	type: "color" | "pattern";
 	name: string;
@@ -28,19 +30,106 @@ export function mapRecord<K extends string, T1, T2>(
 	) as Record<K, T2>;
 }
 
-class ContentBox {
+export type RectangleSide = Record<"right" | "left" | "top" | "bottom" | "center" | "none", boolean>;
+
+class Rectangle {
 	constructor(public x: number, public y: number, public width: number, public height: number) {}
 	public get left(): number {
 		return this.x - this.width / 2;
 	}
+	public set left(n: number) {
+		this.width = Math.abs((this.x - n) * 2);
+	}
 	public get right(): number {
 		return this.x + this.width / 2;
+	}
+	public set right(n: number) {
+		this.width = Math.abs((n - this.x) * 2);
 	}
 	public get top(): number {
 		return this.y - this.height / 2;
 	}
+	public set top(n: number) {
+		this.height = Math.abs((this.y - n) * 2);
+	}
 	public get bottom(): number {
 		return this.y + this.height / 2;
+	}
+	public set bottom(n: number) {
+		this.height = Math.abs((n - this.y) * 2);
+	}
+	public contains(x: number, y: number) {
+		return !(x < this.left || this.right < x || y < this.top || y > this.bottom);
+	}
+}
+
+export class ContentBox extends Rectangle {
+	constructor(x: number, y: number, width: number, height: number) {
+		super(x, y, width, height);
+	}
+
+	draw(ctx: CanvasRenderingContext2D, color: string, colorSelected: string, lineWidth = 2): void {
+		ctx.strokeStyle = color;
+		ctx.fillStyle = color;
+		ctx.lineWidth = lineWidth;
+		ctx.strokeRect(this.left, this.top, this.width, this.height);
+		if (!this.selectedSides.none) {
+			ctx.fillStyle = ctx.strokeStyle = colorSelected;
+			ctx.lineWidth = lineWidth + 6;
+			if (this.selectedSides.center) {
+				this.updateCenter();
+				ctx.fillRect(this.center.left, this.center.top, this.center.width, this.center.height);
+			}
+			if (this.selectedSides.top) {
+				ctx.beginPath();
+				ctx.moveTo(this.left, this.top);
+				ctx.lineTo(this.right, this.top);
+				ctx.stroke();
+			}
+			if (this.selectedSides.bottom) {
+				ctx.beginPath();
+				ctx.moveTo(this.left, this.bottom);
+				ctx.lineTo(this.right, this.bottom);
+				ctx.stroke();
+			}
+			if (this.selectedSides.left) {
+				ctx.beginPath();
+				ctx.moveTo(this.left, this.top);
+				ctx.lineTo(this.left, this.bottom);
+				ctx.stroke();
+			}
+			if (this.selectedSides.right) {
+				ctx.beginPath();
+				ctx.moveTo(this.right, this.top);
+				ctx.lineTo(this.right, this.bottom);
+				ctx.stroke();
+			}
+		}
+	}
+	private center = new Rectangle(0, 0, 0, 0);
+	private selectedSides: RectangleSide = {
+		bottom: false,
+		left: false,
+		right: false,
+		top: false,
+		center: false,
+		none: true,
+	};
+	private updateCenter() {
+		this.center.x = this.x;
+		this.center.y = this.y;
+		this.center.height = this.height / 2;
+		this.center.width = this.width / 2;
+	}
+	checkPoint(x: number, y: number): RectangleSide {
+		if ((this.selectedSides.none = !this.contains(x, y))) return this.selectedSides;
+		this.updateCenter();
+		this.selectedSides.center = this.center.contains(x, y);
+		this.selectedSides.top = this.center.top > y;
+		this.selectedSides.bottom = this.center.bottom < y;
+		this.selectedSides.left = this.center.left > x;
+		this.selectedSides.right = this.center.right < x;
+		return this.selectedSides;
 	}
 }
 
@@ -80,33 +169,115 @@ export class BrushManager {
 	}
 }
 
+interface Point {
+	x: number;
+	y: number;
+}
+interface PositionStrategy {
+	text(ctx: CanvasRenderingContext2D, text: string): { lines: Point[]; fontSize: number };
+	debugDraw(ctx: CanvasRenderingContext2D): void;
+}
+
 export class TextContent {
-	constructor(public box: ContentBox, public text: string, public style: TextStylePrototype) {}
+	constructor(public box: ContentBox, public text: string, public style: TextStylePrototype, public main = false) {}
 	draw(ctx: CanvasRenderingContext2D, brushManager: BrushManager): void {
 		ctx.textAlign = "center";
 		ctx.lineJoin = "round";
 		ctx.miterLimit = 2;
 		ctx.lineWidth = 14;
 		const text = textToCase(this.text, this.style.case).split("\n");
-		const fontSize = calcFontSize(ctx, text, this.style.font, this.box);
-		console.log(fontSize);
+		const { lines, fontSize } = this.getTextCoords(ctx, text);
 		const testString = "ЙДЁ";
 		const testParams = ctx.measureText(testString);
-		const fullHeight = testParams.actualBoundingBoxAscent + testParams.actualBoundingBoxDescent;
-		const y = this.box.bottom - fontSize / (1.8 + text.length * 0.5);
-		const x = this.box.x;
-		// console.log(x, y, text);
-		// console.log(ctx.canvas.width, ctx.canvas.height);
-		// console.log(this.box.left, this.box.top, this.box.width, this.box.height);
-		// ctx.strokeRect(this.box.left, this.box.top, this.box.width, this.box.height);
 		brushManager.setBrush("fillStyle", ctx, this.style.fill, testParams);
 		brushManager.setBrush("strokeStyle", ctx, this.style.stroke, testParams);
 		text.forEach((line, i) => {
-			const ly = text.length == 1 ? y + fontSize / 3 : y - (text.length - i - 1) * fullHeight;
-			ctx.strokeText(line, x, ly);
-			ctx.fillText(line, x, ly);
+			const { x, y } = lines[i];
+			ctx.strokeText(line, x, y);
+			ctx.fillText(line, x, y);
+			/*
+			const params = ctx.measureText(line);
+			ctx.strokeStyle = "#FF0000";
+			ctx.strokeRect(
+				x - params.actualBoundingBoxLeft,
+				y - params.actualBoundingBoxAscent,
+				params.actualBoundingBoxLeft + params.actualBoundingBoxRight,
+				params.actualBoundingBoxAscent + params.actualBoundingBoxDescent
+			);
+			*/
 		});
 	}
+	mainText(ctx: CanvasRenderingContext2D, font: FontSettings, text: string[]): { lines: Point[]; fontSize: number } {
+		let maxLine = text[0];
+		let maxWidth = 0;
+		text.forEach(line => {
+			const width = ctx.measureText(line).width;
+			if (width > maxWidth) {
+				maxLine = line;
+				maxWidth = width;
+			}
+		});
+		const x = ctx.canvas.width / 2;
+		const fontSize = calcTextWidthOld(ctx, maxLine, font, text.length);
+		const testString = "ЙДЁ";
+		const testParams = ctx.measureText(testString);
+		const fullHeight = testParams.actualBoundingBoxAscent + testParams.actualBoundingBoxDescent;
+		const y = ctx.canvas.height - fontSize / (1.5 + text.length * 0.5);
+		const lines = text.map((_, i) => {
+			const ly = y - (text.length - i - 1) * fullHeight;
+			return { x, y: ly };
+		});
+		return { lines, fontSize };
+	}
+	textInBox(
+		ctx: CanvasRenderingContext2D,
+		font: FontSettings,
+		text: string[],
+		box: ContentBox
+	): { lines: Point[]; fontSize: number } {
+		const [fontSize, totalHeight] = calcFontSize(ctx, text, font, this.box);
+		const x = box.x;
+		let prevY = box.top + 14;
+		if (totalHeight < box.height) {
+			prevY += (box.height - totalHeight) / 2;
+		}
+		const lines = text.map(t => {
+			const params = ctx.measureText(t);
+			const y = prevY + params.actualBoundingBoxAscent;
+			prevY = y + params.actualBoundingBoxDescent + 14;
+			return { x, y };
+		});
+		return { lines, fontSize };
+	}
+	getTextCoords(ctx: CanvasRenderingContext2D, text: string[]) {
+		if (this.main) return this.mainText(ctx, this.style.font, text);
+		return this.textInBox(ctx, this.style.font, text, this.box);
+	}
+}
+
+function calcTextWidthOld(ctx: CanvasRenderingContext2D, txt: string, font: FontSettings, linesCount: number): number {
+	const memeWidth = ctx.canvas.width;
+	const memeHeight = ctx.canvas.height;
+	const initialFontSize = memeHeight * 0.1;
+	const maxHeight = Math.min(memeHeight * 0.16, (memeHeight * 0.34) / linesCount);
+	// const maxHeight = memeHeight * 0.16;
+	let fontSize = initialFontSize;
+	// TODO: optimization
+	for (let i = 0; i < 500; i++) {
+		ctx.font = fontSettingsToCSS(font, fontSize);
+		const { width: textWidth } = ctx.measureText(txt);
+		const percent = textWidth / memeWidth;
+		if (percent > 0.97) {
+			fontSize -= 1;
+			continue;
+		}
+		if (percent < 0.96 && fontSize < maxHeight) {
+			fontSize += 1;
+			continue;
+		}
+		return fontSize;
+	}
+	return fontSize;
 }
 
 export type RecursivePartial<T> = {
@@ -236,56 +407,72 @@ class FontSettings {
 	family: string;
 }
 
+export function DefaultStyle(): TextStylePrototype {
+	return {
+		case: "UPPER",
+		fill: {
+			name: "#ffffff",
+			type: "color",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		stroke: {
+			name: "#000000",
+			type: "color",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		name: "custom",
+		font: {
+			bold: false,
+			family: "Impact",
+			italic: false,
+			smallCaps: false,
+		},
+	};
+}
+
 export class Frame {
-	constructor(public image: HTMLImageElement, public text: string) {}
-	public textContent = new TextContent(
-		new ContentBox(
-			this.image.width / 2,
-			this.image.height - (this.image.height * 0.34) / 2,
-			this.image.width * 0.97,
-			this.image.height * 0.34
-		),
-		this.text,
-		{
-			case: "UPPER",
-			fill: {
-				name: "#ffffff",
-				type: "color",
-				patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
-			},
-			stroke: {
-				name: "#000000",
-				type: "color",
-				patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
-			},
-			name: "custom",
-			font: {
-				bold: false,
-				family: "Impact",
-				italic: false,
-				smallCaps: false,
-			},
-		}
-	);
-	public preview?: HTMLImageElement; // TODO: think about it again
-	draw(ctx: CanvasRenderingContext2D, brushManager: BrushManager) {
-		const { image: img } = this;
-		ctx.canvas.getClientRects();
-		ctx.canvas.width = img.width;
-		ctx.canvas.height = img.height;
-		ctx.drawImage(img, 0, 0);
-		// TODO update on change text
-		this.textContent.text = this.text;
-		this.textContent.box = new ContentBox(
-			this.image.width / 2,
-			this.image.height - (this.image.height * 0.34) / 2,
-			this.image.width * 0.97,
-			Math.min(this.image.height * 0.16 * this.text.split("\n").length, this.image.height * 0.34)
+	constructor(public image: HTMLImageElement, text: string) {
+		this.textContent.push(
+			new TextContent(
+				new ContentBox(
+					this.image.width / 2,
+					this.image.height - (this.image.height * 0.34) / 2,
+					this.image.width * 0.97,
+					this.image.height * 0.34
+				),
+				text,
+				DefaultStyle(),
+				true
+			)
 		);
-		this.textContent.draw(ctx, brushManager);
+	}
+	public textContent = new Array<TextContent>();
+	public preview?: HTMLImageElement; // TODO: think about it again
+	draw(ctx: DrawContext, brushManager: BrushManager) {
+		const startDraw = performance.now();
+		const { image: img } = this;
+		ctx.width = img.width;
+		ctx.height = img.height;
+		ctx.main.drawImage(img, 0, 0);
+		// TODO update on change text
+		// this.textContent.box = new ContentBox(
+		// 	this.image.width / 2,
+		// 	this.image.height - (this.image.height * 0.34) / 2,
+		// 	this.image.width * 0.97,
+		// 	Math.min(this.image.height * 0.16 * this.text.split("\n").length, this.image.height * 0.34)
+		// );
+		this.textContent.forEach(t => t.draw(ctx.main, brushManager));
+		const s2 = (performance.now() - startDraw) / 1000;
+		console.debug("Draw ", s2, 1 / s2);
+		// eslint-disable-next-line no-constant-condition
 		if (this.preview) {
-			this.preview.src = ctx.canvas.toDataURL();
+			const start = performance.now();
+			this.preview.src = ctx.main.canvas.toDataURL();
+			const s = (performance.now() - start) / 1000;
+			console.debug("Image", s, 1 / s);
 		}
+		const s = (performance.now() - startDraw) / 1000;
+		console.debug("Total", s, 1 / s);
 	}
 }
 
@@ -295,7 +482,12 @@ const initialFontSize = memeHeight * 0.1;
 	const maxHeight = Math.min(memeHeight * 0.16, (memeHeight * 0.34) / lines.length);
 */
 
-function calcFontSize(ctx: CanvasRenderingContext2D, lines: string[], font: FontSettings, box: ContentBox): number {
+function calcFontSize(
+	ctx: CanvasRenderingContext2D,
+	lines: string[],
+	font: FontSettings,
+	box: ContentBox
+): [number, number] {
 	let maxLine = lines[0];
 	let maxWidth = 0;
 	lines.forEach(line => {
@@ -307,25 +499,30 @@ function calcFontSize(ctx: CanvasRenderingContext2D, lines: string[], font: Font
 	});
 	const memeWidth = box.width;
 	const memeHeight = box.height;
-	const initialFontSize = memeHeight / lines.length;
-	const maxHeight = memeHeight / lines.length;
-	// const maxHeight = memeHeight * 0.16;
-	let fontSize = initialFontSize;
+	let fontSize = memeHeight / lines.length;
+	let totalHeight = 0;
 	// TODO: optimization
 	for (let i = 0; i < 500; i++) {
 		ctx.font = fontSettingsToCSS(font, fontSize);
-		const { width: textWidth } = ctx.measureText(maxLine);
-		const percent = textWidth / memeWidth;
+		const params = ctx.measureText(maxLine);
+		const textWidth = params.width;
+		const textHeight = lines.reduce((sum, l) => {
+			const params = ctx.measureText(l);
+			return sum + (params.actualBoundingBoxAscent + params.actualBoundingBoxDescent) + 14;
+		}, 0);
+		totalHeight = textHeight;
+		const percentW = textWidth / memeWidth;
+		const percentH = textHeight / memeHeight;
 		// console.log(memeWidth, textWidth, percent, fontSize);
-		if (percent > 1) {
+		if (percentW > 1 || percentH > 1) {
 			fontSize -= 1;
 			continue;
 		}
-		if (percent < 0.98 && fontSize < maxHeight) {
+		if (percentW < 0.98 && percentH < 0.98) {
 			fontSize += 1;
 			continue;
 		}
-		return fontSize;
+		break;
 	}
-	return fontSize;
+	return [fontSize, totalHeight];
 }

@@ -1,4 +1,4 @@
-import placeholdersURLs from "../assets/placeholders/INSIDE/*/*.png";
+import placeholdersURLs from "../assets/placeholders/DEV/*/*.png";
 import patternsURLs from "../assets/materials/patterns/*.png";
 import { downloadImagesParcelRecord } from "./http_helpers";
 import { App } from "./app";
