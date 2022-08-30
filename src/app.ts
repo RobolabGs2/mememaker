@@ -90,7 +90,7 @@ export class App {
 		private placeholders: Record<"downloading" | "empty", HTMLImageElement[]>,
 		patternsImages: Record<string, HTMLImageElement>
 	) {
-		this.activeFrame = new Frame(randomFrom(placeholders.empty), `Texy reg po Write text here >>>>>>`);
+		this.activeFrame = new Frame(randomFrom(placeholders.empty), `Hello meme! Write text here >>>>>>`);
 		this.activeText = this.activeFrame.textContent[0];
 		this.frames = [this.activeFrame];
 		setTimeout(() => this.setFrames(this.frames));
