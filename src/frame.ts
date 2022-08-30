@@ -178,17 +178,23 @@ interface PositionStrategy {
 	debugDraw(ctx: CanvasRenderingContext2D): void;
 }
 
+function lineWidthByFontSize(fontSize: number): number {
+	return Math.ceil((18 / 130) * fontSize);
+}
+
 export class TextContent {
 	constructor(public box: ContentBox, public text: string, public style: TextStylePrototype, public main = false) {}
 	draw(ctx: CanvasRenderingContext2D, brushManager: BrushManager): void {
 		ctx.textAlign = "center";
 		ctx.lineJoin = "round";
 		ctx.miterLimit = 2;
-		ctx.lineWidth = 14;
 		const text = textToCase(this.text, this.style.case).split("\n");
 		const { lines, fontSize } = this.getTextCoords(ctx, text);
 		const testString = "ЙДЁ";
+		ctx.font = fontSettingsToCSS(this.style.font, fontSize);
+		console.log(fontSize, text);
 		const testParams = ctx.measureText(testString);
+		ctx.lineWidth = lineWidthByFontSize(fontSize);
 		brushManager.setBrush("fillStyle", ctx, this.style.fill, testParams);
 		brushManager.setBrush("strokeStyle", ctx, this.style.stroke, testParams);
 		text.forEach((line, i) => {
@@ -237,14 +243,15 @@ export class TextContent {
 	): { lines: Point[]; fontSize: number } {
 		const [fontSize, totalHeight] = calcFontSize(ctx, text, font, this.box);
 		const x = box.x;
-		let prevY = box.top + 14;
+		const lineWidth = lineWidthByFontSize(fontSize);
+		let prevY = box.top + lineWidth;
 		if (totalHeight < box.height) {
 			prevY += (box.height - totalHeight) / 2;
 		}
 		const lines = text.map(t => {
 			const params = ctx.measureText(t);
 			const y = prevY + params.actualBoundingBoxAscent;
-			prevY = y + params.actualBoundingBoxDescent + 14;
+			prevY = y + params.actualBoundingBoxDescent + lineWidth;
 			return { x, y };
 		});
 		return { lines, fontSize };
@@ -508,7 +515,7 @@ function calcFontSize(
 		const textWidth = params.width;
 		const textHeight = lines.reduce((sum, l) => {
 			const params = ctx.measureText(l);
-			return sum + (params.actualBoundingBoxAscent + params.actualBoundingBoxDescent) + 14;
+			return sum + (params.actualBoundingBoxAscent + params.actualBoundingBoxDescent) + lineWidthByFontSize(fontSize);
 		}, 0);
 		totalHeight = textHeight;
 		const percentW = textWidth / memeWidth;
