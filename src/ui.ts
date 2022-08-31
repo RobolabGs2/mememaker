@@ -12,7 +12,7 @@ export function TextSettingsInput(
 		value = newValue;
 		elemUpdators.forEach(u => u(value));
 	});
-	const fontFamilies = ["Impact", "Lobster", "Arial"];
+	const fontFamilies = ["Impact", "Lobster", "Arial", "Helvetica", "Next art", "Pacifico", "Caveat", "Comforter"];
 	const textCases = ["As is", "UPPER", "lower"] as CaseType[];
 	return HTML.CreateElement(
 		"article",
