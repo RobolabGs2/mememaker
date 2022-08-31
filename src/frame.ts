@@ -192,7 +192,6 @@ export class TextContent {
 		const { lines, fontSize } = this.getTextCoords(ctx, text);
 		const testString = "ЙДЁ";
 		ctx.font = fontSettingsToCSS(this.style.font, fontSize);
-		console.log(fontSize, text);
 		const testParams = ctx.measureText(testString);
 		ctx.lineWidth = lineWidthByFontSize(fontSize);
 		brushManager.setBrush("fillStyle", ctx, this.style.fill, testParams);
@@ -454,40 +453,37 @@ export class Frame {
 		);
 	}
 	public textContent = new Array<TextContent>();
-	public preview?: HTMLImageElement; // TODO: think about it again
-	draw(ctx: DrawContext, brushManager: BrushManager) {
+	public preview?: CanvasRenderingContext2D; // TODO: think about it again
+	draw(ctx: DrawContext, brushManager: BrushManager, offscreen = false) {
 		const startDraw = performance.now();
 		const { image: img } = this;
-		ctx.width = img.width;
-		ctx.height = img.height;
-		ctx.main.drawImage(img, 0, 0);
-		// TODO update on change text
-		// this.textContent.box = new ContentBox(
-		// 	this.image.width / 2,
-		// 	this.image.height - (this.image.height * 0.34) / 2,
-		// 	this.image.width * 0.97,
-		// 	Math.min(this.image.height * 0.16 * this.text.split("\n").length, this.image.height * 0.34)
-		// );
-		this.textContent.forEach(t => t.draw(ctx.main, brushManager));
+		if (offscreen) {
+			ctx.offscreen.canvas.width = img.width;
+			ctx.offscreen.canvas.height = img.height;
+		} else {
+			ctx.width = img.width;
+			ctx.height = img.height;
+		}
+		const main = offscreen ? ctx.offscreen : ctx.main;
+		main.drawImage(img, 0, 0);
+		this.textContent.forEach(t => t.draw(main, brushManager));
 		const s2 = (performance.now() - startDraw) / 1000;
 		console.debug("Draw ", s2, 1 / s2);
-		// eslint-disable-next-line no-constant-condition
 		if (this.preview) {
 			const start = performance.now();
-			this.preview.src = ctx.main.canvas.toDataURL();
+			const previewWidth = this.preview.canvas.clientWidth;
+			const previewHeight = ((previewWidth / img.width) * img.height) | 0;
+			this.preview.canvas.width = previewWidth;
+			this.preview.canvas.height = previewHeight;
+			this.preview.fillRect(0, 0, 10, 20);
+			this.preview.drawImage(main.canvas, 0, 0, previewWidth, previewHeight);
 			const s = (performance.now() - start) / 1000;
-			console.debug("Image", s, 1 / s);
+			console.debug("Image", s, 1 / s, previewWidth, previewHeight);
 		}
 		const s = (performance.now() - startDraw) / 1000;
 		console.debug("Total", s, 1 / s);
 	}
 }
-
-/*
-// Вычисление размера content box
-const initialFontSize = memeHeight * 0.1;
-	const maxHeight = Math.min(memeHeight * 0.16, (memeHeight * 0.34) / lines.length);
-*/
 
 function calcFontSize(
 	ctx: CanvasRenderingContext2D,

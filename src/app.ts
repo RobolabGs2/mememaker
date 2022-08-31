@@ -190,11 +190,12 @@ export class App {
 		// );
 		let updateTimer = -1;
 		textInput.addEventListener("input", () => {
-			if (updateTimer > 0) clearTimeout(updateTimer);
-			updateTimer = setTimeout(() => {
+			if (updateTimer > 0) cancelAnimationFrame(updateTimer);
+			updateTimer = requestAnimationFrame(() => {
 				this.activeText.text = textInput.value;
 				this.drawFrame(this.activeFrame);
-			}, 500);
+				updateTimer = -1;
+			});
 		});
 		urlInput.accept = "image/*";
 		urlInput.addEventListener("change", ev => {
@@ -358,8 +359,6 @@ export class App {
 												c.main
 											);
 										});
-										console.log(version);
-										console.log(texts[j]);
 									} else {
 										frames[j] = new Frame(img, typeof frameJSON === "string" ? frameJSON : frameJSON.text);
 										if (typeof frameJSON !== "string") {
@@ -401,22 +400,25 @@ export class App {
 	}
 	private getMemeProject(zipCanvas: HTMLCanvasElement) {
 		const zip = new JSZip();
-		this.frames.forEach((frame, index) => {
-			zipCanvas.width = frame.image.width;
-			zipCanvas.height = frame.image.height;
-			this.ctx.offscreen.drawImage(frame.image, 0, 0);
-			const src = zipCanvas.toDataURL();
-			const b = src.substring(src.indexOf("base64,") + 7);
-			zip.file(`${index}.png`, b, { base64: true });
-		});
-		zip.file("text.json", JSON.stringify(this.frames), { comment: "v0.0.3" });
-		zip.generateAsync({ type: "blob" }).then(blob => {
-			const a = document.createElement("a");
-			a.download = "meme.meme";
-			a.href = URL.createObjectURL(blob);
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
+		Promise.all(
+			this.frames.map((frame, index) => {
+				zipCanvas.width = frame.image.width;
+				zipCanvas.height = frame.image.height;
+				this.ctx.offscreen.drawImage(frame.image, 0, 0);
+				return getBlobFromCanvas(this.ctx.offscreen.canvas).then(blob => {
+					zip.file(`${index}.png`, blob, { binary: true });
+				});
+			})
+		).then(() => {
+			zip.file("text.json", JSON.stringify(this.frames), { comment: "v0.0.3" });
+			zip.generateAsync({ type: "blob" }).then(blob => {
+				const a = document.createElement("a");
+				a.download = "meme.meme";
+				a.href = URL.createObjectURL(blob);
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+			});
 		});
 	}
 
@@ -435,18 +437,22 @@ export class App {
 	private getRenderedZIP() {
 		const zip = new JSZip();
 		const maxDigitsCount = this.frames.length.toString().length;
-		this.frames.forEach((frame, index) => {
-			const src = frame.preview!.src;
-			const b = src.substring(src.indexOf("base64,") + 7);
-			zip.file(`${(index + 1).toString().padStart(maxDigitsCount, "0")}.png`, b, { base64: true });
-		});
-		zip.generateAsync({ type: "blob" }).then(blob => {
-			const a = document.createElement("a");
-			a.download = "meme.zip";
-			a.href = URL.createObjectURL(blob);
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
+		Promise.all(
+			this.frames.map((frame, index) => {
+				frame.draw(this.ctx, this.brushManager, true);
+				return getBlobFromCanvas(this.ctx.offscreen.canvas).then(blob => {
+					zip.file(`${(index + 1).toString().padStart(maxDigitsCount, "0")}.png`, blob, { binary: true });
+				});
+			})
+		).then(() => {
+			zip.generateAsync({ type: "blob" }).then(blob => {
+				const a = document.createElement("a");
+				a.download = "meme.zip";
+				a.href = URL.createObjectURL(blob);
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+			});
 		});
 	}
 
@@ -480,9 +486,9 @@ export class App {
 		this.textsListContainer.append(...texts.map(this.createTextView.bind(this)));
 	}
 	createFrameView(frame: Frame) {
-		const image = HTML.CreateElement("img", HTML.AddEventListener("click", this.setActive.bind(this, frame)));
-		frame.preview = image;
-		this.drawFrame(frame);
+		const image = HTML.CreateElement("canvas", HTML.AddEventListener("click", this.setActive.bind(this, frame)));
+		frame.preview = image.getContext("2d") || undefined;
+		setTimeout(() => frame.draw(this.ctx, this.brushManager, true));
 
 		const container = HTML.CreateElement(
 			"article",
@@ -598,4 +604,16 @@ export class App {
 
 function randomFrom<T>(arr: T[]): T {
 	return arr[Math.floor(arr.length * Math.random())];
+}
+
+function getBlobFromCanvas(canvas: HTMLCanvasElement) {
+	return new Promise((resolve, reject) => {
+		canvas.toBlob(blob => {
+			if (!blob) {
+				reject(new Error(`Failed get blob`));
+				return;
+			}
+			resolve(blob);
+		});
+	});
 }
