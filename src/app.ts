@@ -3,7 +3,7 @@ import { downloadImage } from "./http_helpers";
 
 import JSZip from "jszip";
 import { BrushManager, ContentBox, DefaultStyle, Frame, TextContent } from "./frame";
-import { BrushInput, TextSettingsInput } from "./ui";
+import { BrushInput, TextSettingsForm } from "./ui";
 
 class PatternsManager {}
 
@@ -88,7 +88,8 @@ export class App {
 	cursorState?: ReturnType<ContentBox["checkPoint"]>;
 	constructor(
 		private placeholders: Record<"downloading" | "empty", HTMLImageElement[]>,
-		patternsImages: Record<string, HTMLImageElement>
+		patternsImages: Record<string, HTMLImageElement>,
+		fontFamilies: string[]
 	) {
 		this.activeFrame = new Frame(randomFrom(placeholders.empty), `Hello meme! Write text here >>>>>>`);
 		this.activeText = this.activeFrame.textContent[0];
@@ -154,9 +155,11 @@ export class App {
 		const urlInput = HTML.CreateElement("input", HTML.SetInputType("file"));
 		this.setActive(this.activeFrame);
 		const onChange = () => this.drawFrame(this.activeFrame);
-		const textSettingsInput = TextSettingsInput(this.activeText.style, onChange, listener =>
-			this.onChangeActiveFrame.push(app => listener(app.activeText.style))
-		);
+		const textSettingsInput = TextSettingsForm(fontFamilies, patch => {
+			patch.apply(this.activeText.style);
+			onChange();
+		});
+		this.onChangeActiveFrame.push(app => textSettingsInput.update(app.activeText.style));
 		const patternsKeys = Object.keys(patternsImages);
 		const fillBrushInput = BrushInput(
 			this.activeText.style.fill,
@@ -178,16 +181,9 @@ export class App {
 			"Stroke: ",
 			strokeBrushInput,
 			"Text:",
-			textSettingsInput,
+			textSettingsInput.element,
 			textInput
 		);
-		// properties.append(
-		// 	HTML.CreateSelector(
-		// 		"fire",
-		// 		mapRecord(patterns, (_, key) => key),
-		// 		key => (this.styles.fill = patterns[key])
-		// 	)
-		// );
 		let updateTimer = -1;
 		textInput.addEventListener("input", () => {
 			if (updateTimer > 0) cancelAnimationFrame(updateTimer);

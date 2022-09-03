@@ -1,109 +1,158 @@
-import { BrushPath, CaseType, TextStylePrototype } from "./frame";
+import { BrushPath, TextStylePrototype } from "./frame";
 import * as HTML from "./html";
 import styles from "./ui.scss";
 
-export function TextSettingsInput(
-	value: TextStylePrototype,
-	onChange: () => void,
-	resetValueEvent: (listener: (newValue: TextStylePrototype) => void) => void
-) {
-	const elemUpdators: ((value: TextStylePrototype) => void)[] = [];
-	resetValueEvent(newValue => {
-		value = newValue;
-		elemUpdators.forEach(u => u(value));
-	});
-	const fontFamilies = ["Impact", "Lobster", "Arial", "Helvetica", "Next art", "Pacifico", "Caveat", "Comforter"];
-	const textCases = ["As is", "UPPER", "lower"] as CaseType[];
-	return HTML.CreateElement(
-		"article",
-		HTML.AddClass(styles["text-settings__panel"]),
-		HTML.Append(
-			SwitchButton(
-				value.font.italic,
-				state => {
-					value.font.italic = state;
-					onChange();
-				},
-				update => elemUpdators.push(value => update(value.font.italic)),
+export function TextSettingsForm(
+	fontFamilies: string[],
+	onChange: (patch: ChangedData<TextStylePrototype>) => void
+): ObjectInputComponent<TextStylePrototype> {
+	const inputs: Input<TextStylePrototype>[] = [
+		new Input(
+			["font", "italic"],
+			new SwitchButton(
 				HTML.SetText("I", "Italic"),
 				HTML.SetStyles(s => (s.fontStyle = "italic"))
-			),
-			SwitchButton(
-				value.font.bold,
-				state => {
-					value.font.bold = state;
-					onChange();
-				},
-				update => elemUpdators.push(value => update(value.font.bold)),
+			)
+		),
+		new Input(
+			["font", "bold"],
+			new SwitchButton(
 				HTML.SetText("B", "Bold"),
 				HTML.SetStyles(s => (s.fontWeight = "bold"))
-			),
-			SwitchButton(
-				value.font.smallCaps,
-				state => {
-					value.font.smallCaps = state;
-					onChange();
-				},
-				update => elemUpdators.push(value => update(value.font.smallCaps)),
+			)
+		),
+		new Input(
+			["font", "smallCaps"],
+			new SwitchButton(
 				HTML.SetText("Small Caps", "Small caps"),
 				HTML.SetStyles(s => (s.fontVariant = "small-caps"))
-			),
-			HTML.CreateSelector<string, string>(
-				value.font.family,
+			)
+		),
+		new Input(
+			["font", "family"],
+			new Selector(
 				fontFamilies,
-				font => {
-					value.font.family = font;
-					onChange();
-				},
-				sel => {
-					elemUpdators.push(value => (sel.selectedIndex = fontFamilies.findIndex(x => x === value.font.family)));
-				},
 				HTML.ModifyChildren(el => {
 					const op = el as HTMLOptionElement;
 					op.style.fontFamily = op.text;
 				})
-			),
-			HTML.CreateSelector(
-				value.case,
-				textCases,
-				state => {
-					value.case = state;
-					onChange();
-				},
-				sel => {
-					elemUpdators.push(value => (sel.selectedIndex = textCases.findIndex(x => x === value.case)));
-				}
 			)
-		)
+		),
+		new Input(["case"], new Selector(["UPPER", "lower", "As is"])),
+	];
+	inputs.forEach(value => (value.input.onChange = newValue => onChange(new ChangedData(value.path, newValue))));
+	const update = (value: TextStylePrototype) =>
+		inputs.forEach(input => input.input.update(getValueByPath(input.path, value)));
+	const element = HTML.CreateElement(
+		"article",
+		HTML.AddClass(styles["text-settings__panel"]),
+		HTML.Append(inputs.map(x => x.input.element))
 	);
+	return { element, update, onChange };
 }
 
-function SwitchButton(
-	defaultState: boolean,
-	onChange: (newState: boolean) => void,
-	updateStateEvent: (listener: (newState: boolean) => void) => void,
-	...modify: ((t: HTMLButtonElement) => void)[]
-) {
-	let state = defaultState;
+interface InputComponent<T, HTML extends HTMLElement = HTMLElement> {
+	update(value: T): void;
+	onChange?: (newValue: T) => void;
+	readonly element: HTML;
+}
 
-	const updateStateElement = (el: HTMLButtonElement): boolean =>
-		el.classList.toggle(styles["switcher-button__button_enabled_true"], state);
-	return HTML.CreateElement(
-		"button",
-		HTML.AddClass(styles["switcher-button__button"]),
-		updateStateElement,
-		el =>
-			updateStateEvent(newState => {
-				state = newState;
-				updateStateElement(el);
+interface ObjectInputComponent<T extends object> {
+	update(value: T): void;
+	onChange?: (patch: ChangedData<T>) => void;
+	readonly element: HTMLElement;
+}
+
+export class ChangedData<T extends object, P extends PathInObject<T> = PathInObject<T>> {
+	constructor(readonly path: P, readonly value: TypeOfField<T, P>) {}
+	apply(object: T) {
+		setValueByPath(this.path, this.value, object);
+	}
+}
+
+class Input<T extends object, P extends PathInObject<T> = PathInObject<T>> {
+	constructor(
+		readonly path: P,
+		readonly input: InputComponent<TypeOfField<T, P>>,
+		onChange?: (patch: ChangedData<T, P>) => void
+	) {
+		if (onChange) input.onChange = value => onChange(new ChangedData(path, value));
+	}
+}
+
+function setValueByPath<T extends object, P extends PathInObject<T>>(path: P, value: TypeOfField<T, P>, obj: T) {
+	if (!Array.isArray(path)) throw new Error(`Logic error: expected array path, actual: ${typeof path}, ${path}`);
+	const head = path[0] as keyof T;
+	const currentValue = obj[head];
+	if (currentValue instanceof Object)
+		setValueByPath(path.slice(1) as PathInObject<object>, value as never, currentValue as unknown as object);
+	else obj[head] = value as T[keyof T];
+}
+
+function getValueByPath<T extends object, P extends PathInObject<T>>(path: P, obj: T): TypeOfField<T, P> {
+	if (!Array.isArray(path)) throw new Error(`Logic error: expected array path, actual: ${typeof path}, ${path}`);
+	const head = path[0] as keyof T;
+	const currentValue = obj[head];
+	if (currentValue instanceof Object)
+		return getValueByPath(path.slice(1) as PathInObject<object>, currentValue as unknown as object);
+	return currentValue as TypeOfField<T, P>;
+}
+
+type PathInObject<O extends object, P extends keyof O = keyof O> = P extends string
+	? O[P] extends object
+		? PathInObject<O[P]> extends unknown[]
+			? [P, ...PathInObject<O[P]>]
+			: never
+		: [P]
+	: unknown;
+
+type TypeOfField<O extends object, Path extends PathInObject<O>> = Path extends [infer Head, ...infer Tail]
+	? Head extends keyof O
+		? O[Head] extends object
+			? Tail extends PathInObject<O[Head]>
+				? TypeOfField<O[Head], Tail>
+				: never
+			: O[Head]
+		: never
+	: never;
+
+class SwitchButton implements InputComponent<boolean> {
+	element: HTMLElement;
+	constructor(...modify: ((t: HTMLButtonElement) => void)[]) {
+		this.element = HTML.CreateElement(
+			"button",
+			HTML.AddClass(styles["switcher-button__button"]),
+			HTML.AddEventListener("click", () => {
+				this.update(!this.value);
+				this.onChange?.(this.value);
 			}),
-		HTML.AddEventListener("click", function () {
-			state = !state;
-			onChange(state);
-			this.classList.toggle(styles["switcher-button__button_enabled_true"], state);
-		}),
-		...modify
-	);
+			...modify
+		);
+	}
+	onChange?: (newValue: boolean) => void;
+	private value = false;
+	update(newState: boolean) {
+		this.element.classList.toggle(styles["switcher-button__button_enabled_true"], newState);
+		this.value = newState;
+	}
+}
+
+class Selector<T extends string> implements InputComponent<T, HTMLSelectElement> {
+	constructor(readonly states: T[], ...modify: ((t: HTMLSelectElement) => void)[]) {
+		this.element = HTML.CreateSelector(
+			states[0],
+			states,
+			newValue => {
+				this.onChange?.(newValue);
+			},
+			...modify
+		);
+	}
+	update(value: T): void {
+		this.element.selectedIndex = this.states.findIndex(v => v === value);
+	}
+	onChange?: ((newValue: T) => void) | undefined;
+	element: HTMLSelectElement;
 }
 
 export function BrushInput(
@@ -239,8 +288,8 @@ export function BrushInput(
 								true
 							)
 						)
-					),
-					HTML.CreateElement(
+					)
+					/*HTML.CreateElement(
 						"section",
 						HTML.AddClass(styles["text-settings__panel"]),
 						HTML.Append(
@@ -272,7 +321,7 @@ export function BrushInput(
 								scaleEnabled
 							)
 						)
-					)
+					)*/
 				)
 			)
 		)
