@@ -89,7 +89,8 @@ export class App {
 	constructor(
 		private placeholders: Record<"downloading" | "empty", HTMLImageElement[]>,
 		patternsImages: Record<string, HTMLImageElement>,
-		fontFamilies: string[]
+		fontFamilies: string[],
+		project?: Blob
 	) {
 		this.activeFrame = new Frame(randomFrom(placeholders.empty), `Hello meme! Write text here >>>>>>`);
 		this.activeText = this.activeFrame.textContent[0];
@@ -159,27 +160,27 @@ export class App {
 			patch.apply(this.activeText.style);
 			onChange();
 		});
-		this.onChangeActiveFrame.push(app => textSettingsInput.update(app.activeText.style));
 		const patternsKeys = Object.keys(patternsImages);
-		const fillBrushInput = BrushInput(
-			this.activeText.style.fill,
-			onChange,
-			listener => this.onChangeActiveFrame.push(app => listener(app.activeText.style.fill)),
-			patternsKeys
-		);
-		const strokeBrushInput = BrushInput(
-			this.activeText.style.stroke,
-			onChange,
-			listener => this.onChangeActiveFrame.push(app => listener(app.activeText.style.stroke)),
-			patternsKeys
-		);
+		const fillBrushInput = new BrushInput(brushPatch => {
+			brushPatch.apply(this.activeText.style.fill);
+			onChange();
+		}, patternsKeys);
+		const strokeBrushInput = new BrushInput(brushPatch => {
+			brushPatch.apply(this.activeText.style.stroke);
+			onChange();
+		}, patternsKeys);
+		this.onChangeActiveFrame.push(app => {
+			textSettingsInput.update(app.activeText.style);
+			fillBrushInput.update(app.activeText.style.fill);
+			strokeBrushInput.update(app.activeText.style.stroke);
+		});
 		properties.append(
 			"Image (or Ctrl+V, or drop file):",
 			urlInput,
 			"Fill:",
-			fillBrushInput,
+			fillBrushInput.element,
 			"Stroke: ",
-			strokeBrushInput,
+			strokeBrushInput.element,
 			"Text:",
 			textSettingsInput.element,
 			textInput
@@ -325,51 +326,9 @@ export class App {
 				const files = (this as HTMLInputElement).files;
 				if (!files || files.length === 0) return;
 				const file = files[0];
-				const zip = new JSZip();
-				zip
-					.loadAsync(file)
-					.then(zip => {
-						const jsonFile = zip.file("text.json")!;
-						const version = jsonFile.comment;
-						return jsonFile.async("string").then(text => {
-							const texts = JSON.parse(text) as (string | Record<string, any>)[];
-							const images = zip.file(/.*\.png/);
-							const frames = new Array<Frame>(texts.length);
-							return Promise.all(
-								images.map(x => x.async("base64").then(base64 => downloadImage(`data:image/png;base64,${base64}`)))
-							).then(base64Images => {
-								base64Images.forEach((img, i) => {
-									const j = Number(images[i].name.substring(0, images[i].name.length - ".png".length));
-									const frameJSON = texts[j] as any;
-									if (version) {
-										if (version !== "v0.0.3") alert("UNKNOWN VERSION OF MEME PROJECT");
-										const textContent = frameJSON.textContent;
-										frames[j] = new Frame(img, "If you see this, please, contact with parrots");
-										frames[j].textContent = textContent.map((c: any) => {
-											const box = c.box;
-											const style = c.style;
-											return new TextContent(
-												new ContentBox(box.x, box.y, box.width, box.height),
-												c.text,
-												style,
-												c.main
-											);
-										});
-									} else {
-										frames[j] = new Frame(img, typeof frameJSON === "string" ? frameJSON : frameJSON.text);
-										if (typeof frameJSON !== "string") {
-											frames[j].textContent[0].style = frameJSON.textContent.style;
-										}
-									}
-								});
-								return frames;
-							});
-						});
-					})
-					.then(frames => {
-						(this as HTMLInputElement).value = "";
-						setTimeout(self.setFrames.bind(self), 0, frames);
-					});
+				self.openMemeProject(file).then(() => {
+					(this as HTMLInputElement).value = "";
+				});
 			}),
 			HTML.SetText("Open meme project"),
 			HTML.AppendTo(properties)
@@ -393,7 +352,49 @@ export class App {
 				return;
 			}
 		});
+		if (project) this.openMemeProject(project);
 	}
+	private openMemeProject(file: Blob) {
+		const zip = new JSZip();
+		const a = zip
+			.loadAsync(file)
+			.then(zip => {
+				const jsonFile = zip.file("text.json")!;
+				const version = jsonFile.comment;
+				return jsonFile.async("string").then(text => {
+					const texts = JSON.parse(text) as (string | Record<string, any>)[];
+					const images = zip.file(/.*\.png/);
+					const frames = new Array<Frame>(texts.length);
+					return Promise.all(
+						images.map(x => x.async("base64").then(base64 => downloadImage(`data:image/png;base64,${base64}`)))
+					).then(base64Images => {
+						base64Images.forEach((img, i) => {
+							const j = Number(images[i].name.substring(0, images[i].name.length - ".png".length));
+							const frameJSON = texts[j] as any;
+							if (version) {
+								if (version !== "v0.0.3") alert("UNKNOWN VERSION OF MEME PROJECT");
+								const textContent = frameJSON.textContent;
+								frames[j] = new Frame(img, "If you see this, please, contact with parrots");
+								frames[j].textContent = textContent.map((c: any) => {
+									const box = c.box;
+									const style = c.style;
+									return new TextContent(new ContentBox(box.x, box.y, box.width, box.height), c.text, style, c.main);
+								});
+							} else {
+								frames[j] = new Frame(img, typeof frameJSON === "string" ? frameJSON : frameJSON.text);
+								if (typeof frameJSON !== "string") {
+									frames[j].textContent[0].style = frameJSON.textContent.style;
+								}
+							}
+						});
+						return frames;
+					});
+				});
+			})
+			.then(frames => setTimeout(this.setFrames.bind(this), 0, frames));
+		return a;
+	}
+
 	private getMemeProject(zipCanvas: HTMLCanvasElement) {
 		const zip = new JSZip();
 		Promise.all(

@@ -20,3 +20,8 @@ declare module "*.ogg" {
 	const value: string;
 	export = value;
 }
+
+declare module "*.meme" {
+	const value: string;
+	export = value;
+}

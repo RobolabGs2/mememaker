@@ -4,32 +4,32 @@ import styles from "./ui.scss";
 
 export function TextSettingsForm(
 	fontFamilies: string[],
-	onChange: (patch: ChangedData<TextStylePrototype>) => void
+	onChange: (patch: PatchData<TextStylePrototype>) => void
 ): ObjectInputComponent<TextStylePrototype> {
 	const inputs: Input<TextStylePrototype>[] = [
 		new Input(
-			["font", "italic"],
+			["font", ["italic"]],
 			new SwitchButton(
 				HTML.SetText("I", "Italic"),
 				HTML.SetStyles(s => (s.fontStyle = "italic"))
 			)
 		),
 		new Input(
-			["font", "bold"],
+			["font", ["bold"]],
 			new SwitchButton(
 				HTML.SetText("B", "Bold"),
 				HTML.SetStyles(s => (s.fontWeight = "bold"))
 			)
 		),
 		new Input(
-			["font", "smallCaps"],
+			["font", ["smallCaps"]],
 			new SwitchButton(
 				HTML.SetText("Small Caps", "Small caps"),
 				HTML.SetStyles(s => (s.fontVariant = "small-caps"))
 			)
 		),
 		new Input(
-			["font", "family"],
+			["font", ["family"]],
 			new Selector(
 				fontFamilies,
 				HTML.ModifyChildren(el => {
@@ -59,11 +59,34 @@ interface InputComponent<T, HTML extends HTMLElement = HTMLElement> {
 
 interface ObjectInputComponent<T extends object> {
 	update(value: T): void;
-	onChange?: (patch: ChangedData<T>) => void;
+	onChange?: (patch: PatchData<T>) => void;
 	readonly element: HTMLElement;
 }
 
-export class ChangedData<T extends object, P extends PathInObject<T> = PathInObject<T>> {
+export interface PatchData<T extends object> {
+	apply(object: T): void;
+}
+
+export class BatchPatchData<T extends object> implements PatchData<T> {
+	private readonly patches: PatchData<T>[];
+	constructor(...patches: PatchData<T>[]) {
+		this.patches = patches;
+	}
+	apply(object: T): void {
+		this.patches.forEach(p => p.apply(object));
+	}
+}
+
+export class DelegatePatch<P extends object, Path extends PathInObject<P>, C extends object & TypeOfField<P, Path>>
+	implements PatchData<P>
+{
+	constructor(readonly path: Path, readonly patch: PatchData<C>) {}
+	apply(object: P): void {
+		this.patch.apply(getValueByPath(this.path, object) as C);
+	}
+}
+
+export class ChangedData<T extends object, P extends PathInObject<T> = PathInObject<T>> implements PatchData<T> {
 	constructor(readonly path: P, readonly value: TypeOfField<T, P>) {}
 	apply(object: T) {
 		setValueByPath(this.path, this.value, object);
@@ -81,38 +104,39 @@ class Input<T extends object, P extends PathInObject<T> = PathInObject<T>> {
 }
 
 function setValueByPath<T extends object, P extends PathInObject<T>>(path: P, value: TypeOfField<T, P>, obj: T) {
-	if (!Array.isArray(path)) throw new Error(`Logic error: expected array path, actual: ${typeof path}, ${path}`);
 	const head = path[0] as keyof T;
+	if (path.length === 1) {
+		obj[head] = value as T[keyof T];
+		return;
+	}
 	const currentValue = obj[head];
-	if (currentValue instanceof Object)
-		setValueByPath(path.slice(1) as PathInObject<object>, value as never, currentValue as unknown as object);
-	else obj[head] = value as T[keyof T];
+	setValueByPath(path[1] as PathInObject<object>, value as never, currentValue as unknown as object);
 }
 
 function getValueByPath<T extends object, P extends PathInObject<T>>(path: P, obj: T): TypeOfField<T, P> {
-	if (!Array.isArray(path)) throw new Error(`Logic error: expected array path, actual: ${typeof path}, ${path}`);
 	const head = path[0] as keyof T;
 	const currentValue = obj[head];
-	if (currentValue instanceof Object)
-		return getValueByPath(path.slice(1) as PathInObject<object>, currentValue as unknown as object);
-	return currentValue as TypeOfField<T, P>;
+	if (path.length === 1) {
+		return obj[head] as TypeOfField<T, P>;
+	}
+	return getValueByPath(path[1] as PathInObject<object>, currentValue as unknown as object);
 }
 
 type PathInObject<O extends object, P extends keyof O = keyof O> = P extends string
 	? O[P] extends object
-		? PathInObject<O[P]> extends unknown[]
-			? [P, ...PathInObject<O[P]>]
-			: never
+		? [P, PathInObject<O[P]>] | [P]
 		: [P]
-	: unknown;
+	: never;
 
-type TypeOfField<O extends object, Path extends PathInObject<O>> = Path extends [infer Head, ...infer Tail]
+type TypeOfField<O extends object, Path extends PathInObject<O>> = Path extends [keyof O]
+	? O[Path[0]]
+	: Path extends [infer Head, infer Tail]
 	? Head extends keyof O
 		? O[Head] extends object
 			? Tail extends PathInObject<O[Head]>
 				? TypeOfField<O[Head], Tail>
 				: never
-			: O[Head]
+			: never
 		: never
 	: never;
 
@@ -155,229 +179,206 @@ class Selector<T extends string> implements InputComponent<T, HTMLSelectElement>
 	element: HTMLSelectElement;
 }
 
-export function BrushInput(
-	value: BrushPath,
-	onChange: () => void,
-	resetValueEvent: (listener: (newValue: BrushPath) => void) => void,
-	patterns: string[]
-) {
-	console.log(patterns);
-	let scaleEnabled = typeof value.patternSettings.scale !== "string";
-	let scale = scaleEnabled ? (value.patternSettings.scale as { x: number; y: number }) : { x: 1, y: 1 };
-	resetValueEvent(newValue => {
-		value = newValue;
-		scaleEnabled = typeof value.patternSettings.scale !== "string";
-		scale = !scaleEnabled ? { x: 1, y: 1 } : (value.patternSettings.scale as { x: number; y: number });
-		scaleUpdate.forEach(l => l(scale, scaleEnabled));
-	});
-	// eslint-disable-next-line @typescript-eslint/no-empty-function
-	const scaleUpdate: ((scale: { x: number; y: number }, enable: boolean) => void)[] = [];
-	const onTypeChange = new Array<(newType: "color" | "pattern") => void>();
-	let lastPattern = patterns[0];
-	let lastColor = value.name;
-	setTimeout(() => onTypeChange.forEach(l => l(value.type)));
-	return HTML.CreateElement(
-		"article",
-		HTML.AddClass(styles["text-settings__stack"]),
+export class BrushInput implements ObjectInputComponent<BrushPath> {
+	inputs = {
+		type: new Selector(["color", "pattern"]),
+		pattern: new Selector(this.patterns),
+		color: new ColorInput(HTML.SetStyles(s => (s.width = "100%"))),
+		patternSettings: {
+			scaleByFont: new SwitchButton(HTML.SetText("By font", "Auto scale by font size")),
+			scale: new PointInput({ x: 1, y: 1 }),
+			rotate: new NumberInput(HTML.SetNumberInputRange(0, 360, 0.5)),
+			shift: new PointInput(),
+		},
+	};
+	patternSettingsContainer: HTMLElement = HTML.CreateElement(
+		"section",
 		HTML.Append(
-			HTML.CreateSelector(
-				value.type,
-				["color", "pattern"],
-				newType => {
-					value.type = newType;
-					if (newType === "pattern") {
-						value.name = lastPattern;
-					} else {
-						value.name = lastColor;
-					}
-					onTypeChange.forEach(l => l(newType));
-					onChange();
-				},
-				el => {
-					resetValueEvent(newValue => {
-						onTypeChange.forEach(l => l(newValue.type));
-						el.selectedIndex = newValue.type === "color" ? 0 : 1;
-					});
-				}
+			HTML.CreateElement(
+				"section",
+				HTML.AddClass(styles["text-settings__panel"]),
+				HTML.Append(HTML.CreateElement("span", HTML.SetText("Pattern: ")), this.inputs.pattern)
 			),
 			HTML.CreateElement(
 				"section",
-				el => {
-					onTypeChange.push(state => {
-						el.hidden = state !== "color";
-					});
-				},
-				HTML.Append(
-					HTML.CreateElement(
-						"input",
-						HTML.SetInputType("color"),
-						HTML.SetStyles(s => (s.width = "100%")),
-						el => {
-							if (typeof value.name !== "string") return;
-							el.value = value.name;
-							resetValueEvent(newValue => {
-								value = newValue;
-								if (value.type !== "color") return;
-								lastColor = el.value = value.name;
-							});
-						},
-						HTML.AddEventListener("change", function () {
-							value.type = "color";
-							lastColor = value.name = (this as HTMLInputElement).value;
-							onChange();
-						})
-					)
-				)
+				HTML.AddClass(styles["text-settings__panel"]),
+				HTML.Append(HTML.CreateElement("span", HTML.SetText("Rotate (degrees): ")), this.inputs.patternSettings.rotate)
 			),
 			HTML.CreateElement(
 				"section",
-				el => {
-					onTypeChange.push(state => {
-						el.hidden = state !== "pattern";
-					});
-				},
+				HTML.AddClass(styles["text-settings__panel"]),
+				HTML.Append(HTML.CreateElement("span", HTML.SetText("Shift: ")), this.inputs.patternSettings.shift)
+			),
+			HTML.CreateElement(
+				"section",
+				HTML.AddClass(styles["text-settings__panel"]),
 				HTML.Append(
-					HTML.CreateElement(
-						"section",
-						HTML.AddClass(styles["text-settings__panel"]),
-						HTML.Append(
-							HTML.CreateElement("span", HTML.SetText("Pattern: ")),
-							HTML.CreateSelector(lastPattern, patterns, option => {
-								value.type = "pattern";
-								lastPattern = value.name = option;
-								onChange();
-							})
-						)
-					),
-					HTML.CreateElement(
-						"section",
-						HTML.AddClass(styles["text-settings__panel"]),
-						HTML.Append(
-							HTML.CreateElement("span", HTML.SetText("Rotate (degrees): ")),
-							HTML.CreateElement(
-								"input",
-								HTML.SetInputType("number"),
-								HTML.SetNumberInputRange(0, 360, 0.5),
-								el => {
-									el.valueAsNumber = value.patternSettings.rotate;
-									resetValueEvent(() => {
-										el.valueAsNumber = value.patternSettings.rotate;
-									});
-								},
-								HTML.AddEventListener("change", function () {
-									const input = this as HTMLInputElement;
-									value.patternSettings.rotate = input.valueAsNumber;
-									onChange();
-								})
-							)
-						)
-					),
-					HTML.CreateElement(
-						"section",
-						HTML.AddClass(styles["text-settings__panel"]),
-						HTML.Append(
-							HTML.CreateElement("span", HTML.SetText("Shift: ")),
-							PointInput(
-								value.patternSettings.shift,
-								onChange,
-								listener => {
-									resetValueEvent(newValue => {
-										listener(newValue.patternSettings.shift, true);
-									});
-								},
-								true
-							)
-						)
-					)
-					/*HTML.CreateElement(
-						"section",
-						HTML.AddClass(styles["text-settings__panel"]),
-						HTML.Append(
-							HTML.CreateElement("span", HTML.SetText("Scale: ")),
-							SwitchButton(
-								!scaleEnabled,
-								newState => {
-									if (newState) {
-										scaleEnabled = false;
-										value.patternSettings.scale = "font";
-									} else {
-										scaleEnabled = true;
-										value.patternSettings.scale = scale;
-									}
-									scaleUpdate.forEach(l => l(scale, scaleEnabled));
-									onChange();
-								},
-								listener => {
-									resetValueEvent(() => listener(!scaleEnabled));
-								},
-								HTML.SetText("By font", "Auto scale by font size")
-							),
-							PointInput(
-								scale,
-								onChange,
-								listener => {
-									scaleUpdate.push(listener);
-								},
-								scaleEnabled
-							)
-						)
-					)*/
+					HTML.CreateElement("span", HTML.SetText("Scale: ")),
+					this.inputs.patternSettings.scaleByFont,
+					this.inputs.patternSettings.scale
 				)
 			)
 		)
 	);
+	colorSettingsContainer: HTMLElement = HTML.CreateElement("section", HTML.Append(this.inputs.color));
+	element: HTMLElement;
+
+	set activeType(value: "color" | "pattern") {
+		this.inputs.type.update(value);
+		if (value === "color") {
+			this.colorSettingsContainer.hidden = false;
+			this.patternSettingsContainer.hidden = true;
+			return;
+		}
+		this.colorSettingsContainer.hidden = true;
+		this.patternSettingsContainer.hidden = false;
+	}
+	update(newState: BrushPath) {
+		this.activeType = newState.type;
+		if (newState.type === "color") {
+			this.inputs.color.update(newState.name);
+		} else {
+			this.inputs.pattern.update(newState.name);
+		}
+		this.updateScale(newState.patternSettings.scale);
+		this.inputs.patternSettings.rotate.update(newState.patternSettings.rotate);
+		this.inputs.patternSettings.shift.update(newState.patternSettings.shift);
+	}
+
+	constructor(
+		public onChange: (state: PatchData<BrushPath>) => void,
+		readonly patterns: string[],
+		defaultColor: string
+	) {
+		this.element = HTML.CreateElement(
+			"article",
+			HTML.AddClass(styles["text-settings__stack"]),
+			HTML.Append(this.inputs.type, this.colorSettingsContainer, this.patternSettingsContainer)
+		);
+		this.inputs.type.onChange = newType => {
+			this.activeType = newType;
+			if (newType === "color") {
+				this.onChange?.(
+					new BatchPatchData(new ChangedData(["type"], newType), new ChangedData(["name"], defaultColor))
+				);
+				this.inputs.color.update(defaultColor);
+				return;
+			}
+			this.onChange?.(new BatchPatchData(new ChangedData(["type"], newType), new ChangedData(["name"], patterns[0])));
+			this.inputs.pattern.update(patterns[0]);
+		};
+		this.inputs.color.onChange = n => this.onChange?.(new ChangedData(["name"], n));
+		this.inputs.pattern.onChange = n => this.onChange?.(new ChangedData(["name"], n));
+		this.inputs.patternSettings.scaleByFont.onChange = scaleByFont => {
+			if (scaleByFont) {
+				this.updateScale("font");
+				this.onChange?.(new ChangedData(["patternSettings", ["scale"]], "font"));
+				return;
+			}
+			const point = { x: 1, y: 1 };
+			this.updateScale(point);
+			this.onChange?.(new ChangedData(["patternSettings", ["scale"]], point));
+		};
+		this.inputs.patternSettings.rotate.onChange = n =>
+			this.onChange?.(new ChangedData(["patternSettings", ["rotate"]], n));
+		this.inputs.patternSettings.shift.onChange = n =>
+			this.onChange?.(new DelegatePatch(["patternSettings", ["shift"]], n));
+		this.inputs.patternSettings.scale.onChange = n =>
+			this.onChange?.(new DelegatePatch(["patternSettings", ["scale"]], n));
+	}
+
+	private updateScale(newScale: "font" | { x: number; y: number }) {
+		const scaleByFont = newScale === "font";
+		this.inputs.patternSettings.scaleByFont.update(scaleByFont);
+		this.inputs.patternSettings.scale.disabled = scaleByFont;
+		this.inputs.patternSettings.scale.update(scaleByFont ? { x: 1, y: 1 } : newScale);
+	}
 }
 
-function PointInput(
-	value: { x: number; y: number },
-	onChange: () => void,
-	resetValueEvent: (listener: (newValue: { x: number; y: number }, enabled: boolean) => void) => void,
-	enabled = true
-) {
-	return HTML.CreateElement(
-		"article",
-		HTML.AddClass(styles["point-input__container"]),
-		HTML.Append(
-			HTML.CreateElement("span", HTML.SetText("X:")),
-			HTML.CreateElement(
-				"input",
-				HTML.SetInputType("number"),
-				HTML.AddClass(styles["point-input__input"]),
-				HTML.AddEventListener("change", function () {
-					const input = this as HTMLInputElement;
-					value.x = input.valueAsNumber;
-					onChange();
-				}),
-				el => {
-					el.valueAsNumber = value.x;
-					el.disabled = !enabled;
-					resetValueEvent((newValue, enabled) => {
-						value = newValue;
-						el.valueAsNumber = value.x;
-						el.disabled = !enabled;
-					});
-				}
-			),
-			HTML.CreateElement("span", HTML.SetText("Y:")),
-			HTML.CreateElement(
-				"input",
-				HTML.SetInputType("number"),
-				HTML.AddClass(styles["point-input__input"]),
-				HTML.AddEventListener("change", function () {
-					const input = this as HTMLInputElement;
-					value.y = input.valueAsNumber;
-					onChange();
-				}),
-				el => {
-					el.valueAsNumber = value.y;
-					el.disabled = !enabled;
-					resetValueEvent((newValue, enabled) => {
-						value = newValue;
-						el.valueAsNumber = value.y;
-						el.disabled = !enabled;
-					});
-				}
+class NumberInput implements InputComponent<number> {
+	constructor(...modifications: ((el: HTMLInputElement) => void)[]) {
+		this.element = HTML.CreateElement(
+			"input",
+			HTML.SetInputType("number"),
+			HTML.AddEventListener("change", () => {
+				this.onChange?.(this.element.valueAsNumber);
+			}),
+			...modifications
+		);
+	}
+	update(value: number): void {
+		this.element.valueAsNumber = value;
+	}
+	onChange?: ((newValue: number) => void) | undefined;
+	element: HTMLInputElement;
+	set disabled(value: boolean) {
+		this.element.disabled = value;
+	}
+	get disabled(): boolean {
+		return this.element.disabled;
+	}
+}
+
+class ColorInput implements InputComponent<string> {
+	constructor(...modifications: ((el: HTMLInputElement) => void)[]) {
+		this.element = HTML.CreateElement(
+			"input",
+			HTML.SetInputType("color"),
+			HTML.AddEventListener("change", () => {
+				this.onChange?.(this.element.value);
+			}),
+			...modifications
+		);
+	}
+	update(value: string): void {
+		this.element.value = value;
+	}
+	onChange?: ((newValue: string) => void) | undefined;
+	element: HTMLInputElement;
+	set disabled(value: boolean) {
+		this.element.disabled = value;
+	}
+	get disabled(): boolean {
+		return this.element.disabled;
+	}
+}
+
+interface Point {
+	x: number;
+	y: number;
+}
+
+class PointInput implements ObjectInputComponent<Point> {
+	constructor(defaults = { x: 0, y: 0 }) {
+		this.update(defaults);
+		this.element = HTML.CreateElement(
+			"article",
+			HTML.AddClass(styles["point-input__container"]),
+			HTML.Append(
+				HTML.CreateElement("span", HTML.SetText("X:")),
+				this.xInput.element,
+				HTML.CreateElement("span", HTML.SetText("Y:")),
+				this.yInput.element
 			)
-		)
-	);
+		);
+		const xKey = ["x"] as ["x"];
+		const yKey = ["y"] as ["y"];
+		this.xInput.onChange = x => this.onChange?.(new ChangedData(xKey, x));
+		this.yInput.onChange = y => this.onChange?.(new ChangedData(yKey, y));
+	}
+	update(value: Point): void {
+		this.xInput.update(value.x);
+		this.yInput.update(value.y);
+	}
+	onChange?: ((patch: PatchData<Point>) => void) | undefined;
+	element: HTMLElement;
+	xInput = new NumberInput(HTML.AddClass(styles["point-input__input"]));
+	yInput = new NumberInput(HTML.AddClass(styles["point-input__input"]));
+	set disabled(value: boolean) {
+		this.xInput.disabled = value;
+		this.yInput.disabled = value;
+	}
+	get disabled(): boolean {
+		return this.xInput.disabled;
+	}
 }

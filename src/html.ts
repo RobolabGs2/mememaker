@@ -125,20 +125,24 @@ export function ModifyChildren(...modify: ((t: HTMLElement) => void)[]): (parent
 	};
 }
 
-export function Append<T extends HTMLElement>(...elems: T[]): (parent: HTMLElement) => void;
+export function Append<T extends HTMLElement>(
+	...elems: (T | { element: HTMLElement })[]
+): (parent: HTMLElement) => void;
 export function Append<T extends HTMLElement>(elems: ForEachable<T>): (parent: HTMLElement) => void;
 export function Append<T extends HTMLElement>(
 	...elems: (ForEachable<T> | HTMLElement)[]
 ): (parent: HTMLElement) => void;
 export function Append<T extends HTMLElement>(
-	...elems: (ForEachable<T> | HTMLElement)[]
+	...elems: (ForEachable<T> | HTMLElement | { element: HTMLElement })[]
 ): (parent: HTMLElement) => void {
 	return (parent: HTMLElement) =>
 		elems.forEach(value => {
 			if (value instanceof HTMLElement) {
 				parent.append(value);
+			} else if (Reflect.has(value, "element")) {
+				parent.append((value as { element: HTMLElement }).element);
 			} else {
-				value.forEach(elem => parent.append(elem));
+				(value as ForEachable<T>).forEach(elem => parent.append(elem));
 			}
 		});
 }
