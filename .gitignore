@@ -6,4 +6,5 @@ dist/
 .parcel-cache/
 dev.html
 dev.ts
+dev.pug
 memes/

@@ -1,0 +1,54 @@
+import * as HTML from "./html";
+import { randomFrom } from "./app";
+
+export class LoadingView {
+	readonly element: HTMLElement;
+	readonly text: HTMLElement;
+	constructor(readonly placeholders: HTMLImageElement[], parent: HTMLElement = document.body) {
+		this.element = HTML.CreateElement(
+			"article",
+			HTML.AppendTo(parent),
+			HTML.SetStyles(style => {
+				style.position = "absolute";
+				style.right = "0";
+				style.top = "0";
+				style.width = "100%";
+				style.height = "100%";
+				style.backgroundColor = "#CCCCCCAA";
+				style.backgroundSize = `66%`;
+				style.zIndex = "100";
+				style.backgroundRepeat = "no-repeat";
+				style.backgroundPosition = "50% 50%";
+				style.display = "none";
+				style.alignItems = "flex-end";
+				style.justifyContent = "space-around";
+			})
+		);
+		this.text = HTML.CreateElement(
+			"section",
+			HTML.AppendTo(this.element),
+			HTML.SetStyles(style => {
+				style.color = "white";
+				style.fontWeight = "bold";
+				style.fontStyle = "italic";
+				style.paddingBottom = "32px";
+			})
+		);
+	}
+	private counter = 0;
+	up(msg: string) {
+		this.counter++;
+		this.element.style.backgroundImage = `url(${randomFrom(this.placeholders).src}) `;
+		this.text.textContent = msg;
+		this.element.style.display = "flex";
+	}
+	down(msg: string) {
+		this.counter--;
+		if (this.counter === 0) this.element.style.display = "none";
+		if (this.counter < 0) console.log(`Logic error: LoadingView.down for ${msg}`);
+	}
+	await<T>(msg: string, promise: Promise<T>) {
+		this.up(msg);
+		promise.finally(() => this.down(msg));
+	}
+}

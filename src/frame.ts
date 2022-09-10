@@ -1,5 +1,3 @@
-import { DrawContext } from "./app";
-
 export interface BrushPath {
 	type: "color" | "pattern";
 	name: string;
@@ -32,7 +30,7 @@ export function mapRecord<K extends string, T1, T2>(
 
 export type RectangleSide = Record<"right" | "left" | "top" | "bottom" | "center" | "none", boolean>;
 
-class Rectangle {
+export class Rectangle {
 	constructor(public x: number, public y: number, public width: number, public height: number) {}
 	public get left(): number {
 		return this.x - this.width / 2;
@@ -180,6 +178,11 @@ interface PositionStrategy {
 
 function lineWidthByFontSize(fontSize: number): number {
 	return Math.ceil((18 / 130) * fontSize);
+}
+
+export function resizeCanvas(canvas: HTMLCanvasElement, size: { width: number; height: number }) {
+	if (canvas.width !== size.width) canvas.width = size.width;
+	if (canvas.height !== size.height) canvas.height = size.height;
 }
 
 export class TextContent {
@@ -453,35 +456,15 @@ export class Frame {
 		);
 	}
 	public textContent = new Array<TextContent>();
-	public preview?: CanvasRenderingContext2D; // TODO: think about it again
-	draw(ctx: DrawContext, brushManager: BrushManager, offscreen = false) {
-		const startDraw = performance.now();
+	draw(ctx: CanvasRenderingContext2D, brushManager: BrushManager) {
+		// const startDraw = performance.now();
 		const { image: img } = this;
-		if (offscreen) {
-			ctx.offscreen.canvas.width = img.width;
-			ctx.offscreen.canvas.height = img.height;
-		} else {
-			ctx.width = img.width;
-			ctx.height = img.height;
-		}
-		const main = offscreen ? ctx.offscreen : ctx.main;
+		resizeCanvas(ctx.canvas, img);
+		const main = ctx;
 		main.drawImage(img, 0, 0);
 		this.textContent.forEach(t => t.draw(main, brushManager));
-		const s2 = (performance.now() - startDraw) / 1000;
-		console.debug("Draw ", s2, 1 / s2);
-		if (this.preview) {
-			const start = performance.now();
-			const previewWidth = this.preview.canvas.clientWidth;
-			const previewHeight = ((previewWidth / img.width) * img.height) | 0;
-			this.preview.canvas.width = previewWidth;
-			this.preview.canvas.height = previewHeight;
-			this.preview.fillRect(0, 0, 10, 20);
-			this.preview.drawImage(main.canvas, 0, 0, previewWidth, previewHeight);
-			const s = (performance.now() - start) / 1000;
-			console.debug("Image", s, 1 / s, previewWidth, previewHeight);
-		}
-		const s = (performance.now() - startDraw) / 1000;
-		console.debug("Total", s, 1 / s);
+		// const s2 = (performance.now() - startDraw) / 1000;
+		// console.debug("Draw ", s2, 1 / s2);
 	}
 }
 
