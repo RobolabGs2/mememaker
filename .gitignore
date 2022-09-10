@@ -4,3 +4,7 @@ dist/
 .idea/
 .vscode/
 .parcel-cache/
+dev.html
+dev.ts
+dev.pug
+memes/

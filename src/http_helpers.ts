@@ -28,7 +28,7 @@ export function downloadImagesParcelRecord<T extends string>(
 }
 
 function flatRecursiveRecordEntries<T>(r: RecursiveRecord<T>, delimiter = ">"): [string, T][] {
-	return Object.entries(r)
+	return Object.entries(r as { [s: string]: T })
 		.map(([key, rr]: [string, T]) => {
 			if (typeof rr !== "object") return [[key, rr]] as [string, T][];
 			return flatRecursiveRecordEntries(rr).map(([innerKey, value]) => [`${key}${delimiter}${innerKey}`, value]);
@@ -78,4 +78,25 @@ export function downloadResources<I extends string, F extends string>(
 	files: Record<F, string>
 ) {
 	return Promise.all([downloadImages(images), downloadFiles(files)]).then(([images, files]) => ({ images, files }));
+}
+
+export function downloadBlobAs(filename: string) {
+	return (blob: Blob) => {
+		const a = document.createElement("a");
+		a.download = filename;
+		a.href = URL.createObjectURL(blob);
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+	};
+}
+
+export function readBlobAsURL(blob: Blob): Promise<string> {
+	const reader = new FileReader();
+	const promise = new Promise<string>((resolve, reject) => {
+		reader.addEventListener("load", () => resolve(reader.result as string));
+		reader.addEventListener("error", () => reject(reader.error));
+	});
+	reader.readAsDataURL(blob);
+	return promise;
 }

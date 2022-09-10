@@ -1,11 +1,43 @@
 import * as HTML from "./html";
-import { downloadImage } from "./http_helpers";
+import { downloadBlobAs, downloadImage, readBlobAsURL } from "./http_helpers";
 
-import JSZip from "jszip";
-import { BrushManager, ContentBox, DefaultStyle, Frame, TextContent } from "./frame";
-import { BrushInput, TextSettingsInput } from "./ui";
-
-class PatternsManager {}
+import {
+	BrushManager,
+	ContentBox,
+	DefaultStyle,
+	Frame,
+	RectangleSide,
+	resizeCanvas,
+	TextContent,
+	TextStylePrototype,
+} from "./frame";
+import { TextSettingsForm } from "./ui/inputs/text_settings_input";
+import { BrushInput } from "./ui/inputs/brush_input";
+import { BatchPatchData, ChangedData, DelegatePatch, PatchData } from "./patch";
+import {
+	State,
+	SetActiveFrame,
+	SetActiveText,
+	AddFrame,
+	SetFrames,
+	RemoveFrame,
+	ShiftFrame,
+	AddContent,
+	ShiftContent,
+	makeDiffHandler,
+	StateDiffListener,
+	EmptyDiff,
+	RemoveContent,
+} from "./state";
+import { Meme } from "./meme";
+import { FramePreview } from "./frame_preview";
+import { ContentPreview } from "./content_preview";
+import PreviewListContainer from "./ui/preview_container";
+import { LoadingView } from "./loading_view";
+import { CanvasCursor } from "./ui/cursor";
+import TextInput from "./ui/inputs/text_input";
+import FilesInput from "./ui/inputs/file_input";
+import { Point } from "./ui/inputs/point_input";
 
 export class DrawContext {
 	constructor(
@@ -35,65 +67,57 @@ export class DrawContext {
 }
 
 export class App {
-	private frames: Frame[];
-	private activeFrame: Frame;
-	private activeText: TextContent;
+	private state: State;
 	private ctx: DrawContext;
 
 	setActive(frame: Frame) {
-		this.drawFrame(frame);
-		this.activeFrame = frame;
-		this.activeText = frame.textContent[0];
-		this.textInput.value = this.activeText.text;
-		this.onChangeActiveFrame.forEach(l => l(this));
-		this.setTexts(frame.textContent);
+		this.state.apply(new SetActiveFrame(frame));
 	}
 	setActiveText(text: TextContent) {
-		this.activeText = text;
-		this.textInput.value = this.activeText.text;
-		this.drawFrame(this.activeFrame);
-		this.onChangeActiveFrame.forEach(l => l(this));
+		this.state.apply(new SetActiveText(text));
 	}
 
 	drawFrame(frame: Frame) {
-		frame.draw(this.ctx, this.brushManager);
+		frame.draw(this.ctx.main, this.brushManager);
+		this.framesViews.updatePreview(frame);
 	}
 
-	cursorPosition: { x: number; y: number } = { x: 0, y: 0 };
-	cursorDown = false;
+	cursor: CanvasCursor;
+	private framesViews: PreviewListContainer<Frame>;
+	private contentViews: PreviewListContainer<TextContent>;
 	uiDraw() {
-		this.ctx.ui.clearRect(0, 0, this.ctx.width, this.ctx.height);
-		const box = this.activeText.box;
-		const state = this.cursorState;
-		if (this.activeText.main) return;
-		if (!this.cursorDown)
-			this.cursorState = this.activeText.box.checkPoint(this.cursorPosition.x, this.cursorPosition.y);
-		if (state && this.cursorDown) {
-			if (state.center) {
-				box.x = this.cursorPosition.x;
-				box.y = this.cursorPosition.y;
-			}
-			if (state.bottom) box.bottom = this.cursorPosition.y;
-			if (state.top) box.top = this.cursorPosition.y;
-			if (state.left) box.left = this.cursorPosition.x;
-			if (state.right) box.right = this.cursorPosition.x;
+		for (let i = 0; i < this.state.appliedOperations.length; i++) {
+			const { diff: patch, op } = this.state.appliedOperations[i];
+			this.drawPatchHandler(patch, op !== "do");
 		}
-		box.draw(this.ctx.ui, "#FF00AA", this.cursorDown ? "#FFAA44" : "#FF0000AA", 3);
+		this.state.appliedOperations.length = 0;
+		resizeCanvas(this.ctx.ui.canvas, this.ctx.main.canvas);
+		this.ctx.ui.clearRect(0, 0, this.ctx.width, this.ctx.height);
+		if (this.state.activeText.main) return;
+		const box = this.state.activeText.box;
+		if (this.cursor.moveStart) {
+			const state = box.checkPoint(this.cursor.moveStart.x, this.cursor.moveStart.y);
+			const patch = contentBoxPatch(state, this.cursor.position);
+			const revert = patch.apply(box);
+			box.draw(this.ctx.ui, "#FF00AA", "#FF0000AA", 3);
+			revert.apply(box);
+		} else {
+			box.checkPoint(this.cursor.position.x, this.cursor.position.y);
+			box.draw(this.ctx.ui, "#FF00AA", "#FFAA44", 3);
+		}
 	}
 	private brushManager: BrushManager;
 	onChangeActiveFrame = new Array<(app: App) => void>();
-	private textInput: HTMLTextAreaElement;
-	private framesListContainer: HTMLElement;
-	private textsListContainer: HTMLElement;
-	cursorState?: ReturnType<ContentBox["checkPoint"]>;
+	private busyView = new LoadingView(this.placeholders["downloading"]);
 	constructor(
 		private placeholders: Record<"downloading" | "empty", HTMLImageElement[]>,
-		patternsImages: Record<string, HTMLImageElement>
+		patternsImages: Record<string, HTMLImageElement>,
+		fontFamilies: string[],
+		project?: Blob
 	) {
-		this.activeFrame = new Frame(randomFrom(placeholders.empty), `Hello meme! Write text here >>>>>>`);
-		this.activeText = this.activeFrame.textContent[0];
-		this.frames = [this.activeFrame];
-		setTimeout(() => this.setFrames(this.frames));
+		this.busyView.up("Loading...");
+		setTimeout(() => this.busyView.down("Loading..."));
+		this.state = new State([new Frame(randomFrom(placeholders.empty), `Hello meme! Write text here >>>>>>`)]);
 		const animationFrame = () => {
 			this.uiDraw();
 			requestAnimationFrame(animationFrame);
@@ -101,171 +125,86 @@ export class App {
 		requestAnimationFrame(animationFrame);
 		const canvas = document.querySelector("canvas#main") as HTMLCanvasElement;
 		const canvasUI = document.querySelector("canvas#ui") as HTMLCanvasElement;
-		canvas.addEventListener("mousemove", ev => {
-			const scaleX = canvas.width / canvas.clientWidth;
-			const scaleY = canvas.height / canvas.clientHeight;
-			this.cursorPosition.x = ev.offsetX * scaleX;
-			this.cursorPosition.y = ev.offsetY * scaleY;
+		this.cursor = new CanvasCursor(canvas, (from, to) => {
+			const state = this.state.activeText.box.checkPoint(from.x, from.y);
+			this.state.apply(
+				new DelegatePatch<State, ["activeText", ["box"]], ContentBox>(
+					["activeText", ["box"]],
+					contentBoxPatch(state, to)
+				)
+			);
 		});
-
-		canvas.addEventListener("mousedown", ev => {
-			if (ev.button !== 0) return;
-			const scaleX = canvas.width / canvas.clientWidth;
-			const scaleY = canvas.height / canvas.clientHeight;
-			this.cursorPosition.x = ev.offsetX * scaleX;
-			this.cursorPosition.y = ev.offsetY * scaleY;
-			this.cursorDown = true;
-		});
-		canvas.addEventListener("mouseup", ev => {
-			if (ev.button !== 0) return;
-			const scaleX = canvas.width / canvas.clientWidth;
-			const scaleY = canvas.height / canvas.clientHeight;
-			this.cursorPosition.x = ev.offsetX * scaleX;
-			this.cursorPosition.y = ev.offsetY * scaleY;
-			this.cursorDown = false;
-			requestAnimationFrame(() => this.drawFrame(this.activeFrame));
-		});
-		const zipCanvas = document.createElement("canvas");
-		this.ctx = new DrawContext(canvas.getContext("2d")!, canvasUI.getContext("2d")!, zipCanvas.getContext("2d")!);
+		this.ctx = new DrawContext(
+			canvas.getContext("2d")!,
+			canvasUI.getContext("2d")!,
+			document.createElement("canvas").getContext("2d")!
+		);
 		this.brushManager = new BrushManager(this.ctx.offscreen, patternsImages);
+		this.framesViews = new PreviewListContainer(frame => this.createFrameView(frame), this.brushManager);
+		this.contentViews = new PreviewListContainer(content => this.createContentView(content), this.brushManager);
 		const framesContainer = document.querySelector("section#frames") as HTMLElement;
+		framesContainer.append(this.framesViews.element);
+		addButton("Add frame", () => this.addFrame(), framesContainer);
 		const textsContainer = document.querySelector("section#current-frame") as HTMLElement;
-		this.framesListContainer = HTML.CreateElement("article", HTML.AddClass("list"));
-		this.textsListContainer = HTML.CreateElement("article", HTML.AddClass("list"));
-		const addFrameButton = HTML.CreateElement(
-			"button",
-			HTML.SetText("Add frame"),
-			HTML.AddEventListener("click", () => {
-				this.addFrame();
-			})
-		);
-		const addTextButton = HTML.CreateElement(
-			"button",
-			HTML.SetText("Add text"),
-			HTML.AddEventListener("click", () => {
-				this.addText();
-			})
-		);
-		framesContainer.append(this.framesListContainer, addFrameButton);
-		textsContainer.append(this.textsListContainer, addTextButton);
+		textsContainer.append(this.contentViews.element);
+		addButton("Add text", () => this.addText(), textsContainer);
+
 		const properties = document.querySelector("section#properties") as HTMLElement;
-		const textInput = (this.textInput = HTML.CreateElement("textarea"));
-		textInput.rows = 15;
-		const urlInput = HTML.CreateElement("input", HTML.SetInputType("file"));
-		this.setActive(this.activeFrame);
-		const onChange = () => this.drawFrame(this.activeFrame);
-		const textSettingsInput = TextSettingsInput(this.activeText.style, onChange, listener =>
-			this.onChangeActiveFrame.push(app => listener(app.activeText.style))
-		);
+		const urlInput = new FilesInput("image/*", files => {
+			const image = files.find(file => file.type?.match(/^image/));
+			if (image) this.busyView.await("Upload image from file...", this.downloadAndSetImage(image));
+		});
+		const applyPatch = (patch: PatchData<TextStylePrototype>) =>
+			this.state.apply(
+				new DelegatePatch<State, ["activeText", ["style"]], TextStylePrototype>(["activeText", ["style"]], patch)
+			);
+		const textSettingsInput = TextSettingsForm(fontFamilies, applyPatch);
 		const patternsKeys = Object.keys(patternsImages);
-		const fillBrushInput = BrushInput(
-			this.activeText.style.fill,
-			onChange,
-			listener => this.onChangeActiveFrame.push(app => listener(app.activeText.style.fill)),
-			patternsKeys
+		const fillBrushInput = new BrushInput(
+			brushPatch => applyPatch(new DelegatePatch(["fill"], brushPatch)),
+			patternsKeys,
+			"#FFFFFF"
 		);
-		const strokeBrushInput = BrushInput(
-			this.activeText.style.stroke,
-			onChange,
-			listener => this.onChangeActiveFrame.push(app => listener(app.activeText.style.stroke)),
-			patternsKeys
+		const strokeBrushInput = new BrushInput(
+			brushPatch => applyPatch(new DelegatePatch(["stroke"], brushPatch)),
+			patternsKeys,
+			"#000000"
 		);
+		const textInput = new TextInput(newValue =>
+			this.state.apply(new ChangedData<State, ["activeText", ["text"]]>(["activeText", ["text"]], newValue))
+		);
+		this.onChangeActiveFrame.push(app => {
+			textSettingsInput.update(app.state.activeText.style);
+			fillBrushInput.update(app.state.activeText.style.fill);
+			strokeBrushInput.update(app.state.activeText.style.stroke);
+			textInput.update(app.state.activeText.text);
+		});
 		properties.append(
 			"Image (or Ctrl+V, or drop file):",
-			urlInput,
+			urlInput.element,
 			"Fill:",
-			fillBrushInput,
+			fillBrushInput.element,
 			"Stroke: ",
-			strokeBrushInput,
+			strokeBrushInput.element,
 			"Text:",
-			textSettingsInput,
-			textInput
+			textSettingsInput.element,
+			textInput.element
 		);
-		// properties.append(
-		// 	HTML.CreateSelector(
-		// 		"fire",
-		// 		mapRecord(patterns, (_, key) => key),
-		// 		key => (this.styles.fill = patterns[key])
-		// 	)
-		// );
-		let updateTimer = -1;
-		textInput.addEventListener("input", () => {
-			if (updateTimer > 0) cancelAnimationFrame(updateTimer);
-			updateTimer = requestAnimationFrame(() => {
-				this.activeText.text = textInput.value;
-				this.drawFrame(this.activeFrame);
-				updateTimer = -1;
-			});
-		});
-		urlInput.accept = "image/*";
-		urlInput.addEventListener("change", ev => {
-			const items = urlInput.files;
-			if (!items) return;
-			for (let index = 0; index < items.length; index++) {
-				const file = items[index];
-				if (!file.type?.match(/^image/)) {
-					continue;
-				}
-				const reader = new FileReader();
-				const frame = this.activeFrame;
-				frame.image = randomFrom(placeholders.downloading);
-				this.drawFrame(frame);
-				reader.addEventListener("load", ev => {
-					downloadImage(reader.result as string).then(img => {
-						frame.image = img;
-						this.drawFrame(frame);
-					});
-				});
-				reader.readAsDataURL(file);
-				return;
-			}
-		});
 		document.addEventListener("paste", event => {
 			const items = event.clipboardData?.items;
 			if (!items) return;
 			for (let index = 0; index < items.length; index++) {
 				const item = items[index];
-				if (!item.type?.match(/^image/)) {
-					continue;
-				}
-				const file = item.getAsFile()!;
-				const reader = new FileReader();
-				const frame = this.activeFrame;
-				frame.image = randomFrom(placeholders.downloading);
-				this.drawFrame(frame);
-				reader.addEventListener("load", ev => {
-					downloadImage(reader.result as string).then(img => {
-						frame.image = img;
-						this.drawFrame(frame);
-					});
-				});
-				reader.readAsDataURL(file);
+				if (!item.type?.match(/^image/)) continue;
+				this.busyView.await(
+					"Pasting image...",
+					new Promise<File>((resolve, reject) => {
+						const file = item.getAsFile();
+						if (file) resolve(file);
+						else reject("Failed to get file from clipboard");
+					}).then(this.downloadAndSetImage)
+				);
 				return;
-			}
-		});
-		document.addEventListener("dragover", function (ev) {
-			ev.preventDefault();
-		});
-		framesContainer.addEventListener("drop", ev => {
-			ev.preventDefault();
-			ev.stopPropagation();
-			const items = ev.dataTransfer?.files;
-			if (!items) return;
-			for (let index = 0; index < items.length; index++) {
-				const file = items[index];
-				if (!file.type?.match(/^image/)) {
-					continue;
-				}
-				const reader = new FileReader();
-				this.addFrame(randomFrom(placeholders.downloading));
-				const frame = this.frames[this.frames.length - 1];
-				reader.addEventListener("load", ev => {
-					downloadImage(reader.result as string).then(img => {
-						frame.image = img;
-						this.drawFrame(frame);
-					});
-				});
-				reader.readAsDataURL(file);
 			}
 		});
 		document.addEventListener("drop", ev => {
@@ -274,346 +213,180 @@ export class App {
 			if (!items) return;
 			for (let index = 0; index < items.length; index++) {
 				const file = items[index];
-				if (!file.type?.match(/^image/)) {
-					continue;
-				}
-				const reader = new FileReader();
-				const frame = this.activeFrame;
-				frame.image = randomFrom(placeholders.downloading);
-				this.drawFrame(frame);
-				reader.addEventListener("load", () => {
-					downloadImage(reader.result as string).then(img => {
-						frame.image = img;
-						this.drawFrame(frame);
-					});
-				});
-				reader.readAsDataURL(file);
+				if (!file.type?.match(/^image/)) continue;
+				this.busyView.await("Dropping image to meme...", this.downloadAndSetImage(file));
 				return;
 			}
 		});
-
-		HTML.CreateElement(
-			"button",
-			HTML.SetText("Download rendered meme"),
-			HTML.AddEventListener("click", () => {
-				this.getRenderedZIP();
-			}),
-			HTML.AppendTo(properties)
+		document.addEventListener("dragover", ev => ev.preventDefault());
+		framesContainer.addEventListener("drop", ev => {
+			ev.preventDefault();
+			ev.stopPropagation();
+			const items = ev.dataTransfer?.files;
+			if (!items) return;
+			const frames = Promise.all(
+				Array.from(items)
+					.filter(file => file.type?.match(/^image/))
+					.map(file => readBlobAsURL(file).then(downloadImage))
+			)
+				.then(images => new BatchPatchData(...images.map(img => new AddFrame(new Frame(img, "")))))
+				.then(patch => this.state.apply(patch));
+			this.busyView.await("Creating new frames...", frames);
+		});
+		addButton(
+			"Download rendered meme",
+			() =>
+				this.busyView.await(
+					"Rendering...",
+					Meme.renderToZIP(this.state.frames, this.brushManager).then(downloadBlobAs("meme.zip"))
+				),
+			properties
+		);
+		addButton(
+			"Download csv script",
+			() =>
+				this.busyView.await("Preparing script...", Meme.scriptCSV(this.state.frames).then(downloadBlobAs("meme.csv"))),
+			properties
+		);
+		addButton(
+			"Download meme project",
+			() => this.busyView.await("Packing project...", Meme.toFile(this.state.frames).then(downloadBlobAs("meme.meme"))),
+			properties
 		);
 
-		HTML.CreateElement(
-			"button",
-			HTML.SetText("Download csv script"),
-			HTML.AddEventListener("click", () => {
-				this.getScriptCSV();
-			}),
-			HTML.AppendTo(properties)
-		);
-		HTML.CreateElement(
-			"button",
-			HTML.SetText("Download meme project"),
-			HTML.AddEventListener("click", () => {
-				this.getMemeProject(zipCanvas);
-			}),
-			HTML.AppendTo(properties)
-		);
-
-		// eslint-disable-next-line @typescript-eslint/no-this-alias
-		const self = this;
-		properties.append("Open meme project:");
-		HTML.CreateElement(
-			"input",
-			HTML.SetInputType("file"),
-			input => (input.accept = ".meme"),
-			HTML.AddEventListener("change", function () {
-				const files = (this as HTMLInputElement).files;
-				if (!files || files.length === 0) return;
-				const file = files[0];
-				const zip = new JSZip();
-				zip
-					.loadAsync(file)
-					.then(zip => {
-						const jsonFile = zip.file("text.json")!;
-						const version = jsonFile.comment;
-						return jsonFile.async("string").then(text => {
-							const texts = JSON.parse(text) as (string | Record<string, any>)[];
-							const images = zip.file(/.*\.png/);
-							const frames = new Array<Frame>(texts.length);
-							return Promise.all(
-								images.map(x => x.async("base64").then(base64 => downloadImage(`data:image/png;base64,${base64}`)))
-							).then(base64Images => {
-								base64Images.forEach((img, i) => {
-									const j = Number(images[i].name.substring(0, images[i].name.length - ".png".length));
-									const frameJSON = texts[j] as any;
-									if (version) {
-										if (version !== "v0.0.3") alert("UNKNOWN VERSION OF MEME PROJECT");
-										const textContent = frameJSON.textContent;
-										frames[j] = new Frame(img, "If you see this, please, contact with parrots");
-										frames[j].textContent = textContent.map((c: any) => {
-											const box = c.box;
-											const style = c.style;
-											return new TextContent(
-												new ContentBox(box.x, box.y, box.width, box.height),
-												c.text,
-												style,
-												c.main
-											);
-										});
-									} else {
-										frames[j] = new Frame(img, typeof frameJSON === "string" ? frameJSON : frameJSON.text);
-										if (typeof frameJSON !== "string") {
-											frames[j].textContent[0].style = frameJSON.textContent.style;
-										}
-									}
-								});
-								return frames;
-							});
-						});
-					})
-					.then(frames => {
-						(this as HTMLInputElement).value = "";
-						setTimeout(self.setFrames.bind(self), 0, frames);
-					});
-			}),
-			HTML.SetText("Open meme project"),
-			HTML.AppendTo(properties)
-		);
+		const memeInput = new FilesInput(".meme", files => {
+			const file = files[0];
+			this.busyView.await(
+				"Open project...",
+				Meme.fromFile(file).then(frames => this.state.apply(new SetFrames(frames)))
+			);
+		});
+		properties.append("Open meme project:", memeInput.element);
 
 		document.addEventListener("keydown", ev => {
+			if (ev.ctrlKey && ev.code === "KeyZ") {
+				ev.preventDefault();
+				if (ev.shiftKey) this.state.redo();
+				else this.state.undo();
+			}
 			if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLTextAreaElement) {
 				return;
 			}
 			if (ev.code === "ArrowRight") {
-				const current = this.activeFrame;
-				const next = this.frames[(this.frames.findIndex(x => x === current) + 1) % this.frames.length];
+				const current = this.state.activeFrame;
+				const next =
+					this.state.frames[(this.state.frames.findIndex(x => x === current) + 1) % this.state.frames.length];
 				this.setActive(next);
 				return;
 			}
 			if (ev.code === "ArrowLeft") {
-				const current = this.activeFrame;
+				const current = this.state.activeFrame;
 				const next =
-					this.frames[(this.frames.findIndex(x => x === current) + this.frames.length - 1) % this.frames.length];
+					this.state.frames[
+						(this.state.frames.findIndex(x => x === current) + this.state.frames.length - 1) % this.state.frames.length
+					];
 				this.setActive(next);
 				return;
 			}
 		});
+		if (project)
+			this.busyView.await(
+				"Opening...",
+				Meme.fromFile(project).then(frames => this.state.apply(new SetFrames(frames)))
+			);
 	}
-	private getMemeProject(zipCanvas: HTMLCanvasElement) {
-		const zip = new JSZip();
-		Promise.all(
-			this.frames.map((frame, index) => {
-				zipCanvas.width = frame.image.width;
-				zipCanvas.height = frame.image.height;
-				this.ctx.offscreen.drawImage(frame.image, 0, 0);
-				return getBlobFromCanvas(this.ctx.offscreen.canvas).then(blob => {
-					zip.file(`${index}.png`, blob, { binary: true });
-				});
-			})
-		).then(() => {
-			zip.file("text.json", JSON.stringify(this.frames), { comment: "v0.0.3" });
-			zip.generateAsync({ type: "blob" }).then(blob => {
-				const a = document.createElement("a");
-				a.download = "meme.meme";
-				a.href = URL.createObjectURL(blob);
-				document.body.appendChild(a);
-				a.click();
-				document.body.removeChild(a);
-			});
-		});
-	}
-
-	private getScriptCSV() {
-		const blob = new Blob([this.frames.map(frame => `"${frame.textContent[0].text.replace(/"/g, '""')}"`).join("\n")], {
-			type: "text/csv",
-		});
-		const a = document.createElement("a");
-		a.download = "meme.csv";
-		a.href = URL.createObjectURL(blob);
-		document.body.appendChild(a);
-		a.click();
-		document.body.removeChild(a);
-	}
-
-	private getRenderedZIP() {
-		const zip = new JSZip();
-		const maxDigitsCount = this.frames.length.toString().length;
-		Promise.all(
-			this.frames.map((frame, index) => {
-				frame.draw(this.ctx, this.brushManager, true);
-				return getBlobFromCanvas(this.ctx.offscreen.canvas).then(blob => {
-					zip.file(`${(index + 1).toString().padStart(maxDigitsCount, "0")}.png`, blob, { binary: true });
-				});
-			})
-		).then(() => {
-			zip.generateAsync({ type: "blob" }).then(blob => {
-				const a = document.createElement("a");
-				a.download = "meme.zip";
-				a.href = URL.createObjectURL(blob);
-				document.body.appendChild(a);
-				a.click();
-				document.body.removeChild(a);
-			});
-		});
-	}
-
-	addFrame(img: HTMLImageElement = randomFrom(this.placeholders.empty)): HTMLElement {
+	private drawPatchHandler = makeDiffHandler(
+		new StateDiffListener([BatchPatchData], (diff, cancel) =>
+			diff.patches.forEach(patch => this.drawPatchHandler(patch, cancel))
+		),
+		new StateDiffListener([ChangedData, DelegatePatch], (_, cancel) => {
+			if (cancel) this.onChangeActiveFrame.forEach(v => v(this));
+			this.contentViews.updatePreview(this.state.activeText);
+		}),
+		new StateDiffListener([AddFrame], diff => this.framesViews.add(diff.frame)),
+		new StateDiffListener([AddContent], diff => this.contentViews.add(diff.content)),
+		new StateDiffListener([RemoveFrame], diff => this.framesViews.remove(diff.frame)),
+		new StateDiffListener([RemoveContent], diff => this.contentViews.remove(diff.content)),
+		new StateDiffListener([AddFrame, ShiftFrame], () => this.framesViews.updateIndexes(this.state.frames)),
+		new StateDiffListener([AddContent, ShiftContent], () =>
+			this.contentViews.updateIndexes(this.state.activeFrame.textContent)
+		),
+		new StateDiffListener([SetFrames], diff => this.framesViews.reset(diff.frames)),
+		new StateDiffListener([SetFrames, SetActiveFrame], () =>
+			this.contentViews.reset(this.state.activeFrame.textContent)
+		),
+		new StateDiffListener(
+			[SetFrames, SetActiveFrame, ShiftContent, AddContent, RemoveContent, ChangedData, DelegatePatch],
+			() => {
+				this.drawFrame(this.state.activeFrame);
+			}
+		),
+		new StateDiffListener([SetFrames, SetActiveFrame, SetActiveText], () => {
+			this.onChangeActiveFrame.forEach(v => v(this));
+			this.framesViews.focus(this.state.activeFrame);
+			this.contentViews.focus(this.state.activeText);
+		})
+	);
+	addFrame(img: HTMLImageElement = randomFrom(this.placeholders.empty)) {
 		const newFrame = new Frame(img, "");
-		this.frames.push(newFrame);
-		const elem = this.createFrameView(newFrame);
-		this.framesListContainer.append(elem);
+		this.state.apply(new AddFrame(newFrame));
 		this.setActive(newFrame);
-		return elem;
 	}
 	addText() {
-		const frame = this.activeFrame;
+		const frame = this.state.activeFrame;
 		const newText = new TextContent(
 			new ContentBox(frame.image.width / 2, frame.image.height / 2, frame.image.width / 2, frame.image.height / 2),
 			"New text",
 			DefaultStyle()
 		);
-		this.activeFrame.textContent.push(newText);
-		this.textsListContainer.append(this.createTextView(newText));
+		this.state.apply(new AddContent(newText));
 		this.setActiveText(newText);
 	}
 	setFrames(frames: Frame[]) {
-		this.frames = frames;
-		this.framesListContainer.innerHTML = "";
-		this.framesListContainer.append(...this.frames.map(this.createFrameView.bind(this)));
-		this.setActive(frames[0]);
+		this.state.apply(new SetFrames(frames));
 	}
-	setTexts(texts: TextContent[]) {
-		this.textsListContainer.innerHTML = "";
-		this.textsListContainer.append(...texts.map(this.createTextView.bind(this)));
+	createFrameView(frame: Frame): FramePreview {
+		return new FramePreview(frame, patch => {
+			if (patch instanceof RemoveFrame) {
+				if (this.state.frames.length === 1) this.addFrame();
+				if (this.state.activeFrame === frame) this.setActive(this.state.frames.find(v => v !== frame)!);
+			}
+			this.state.apply(patch);
+		});
 	}
-	createFrameView(frame: Frame) {
-		const image = HTML.CreateElement("canvas", HTML.AddEventListener("click", this.setActive.bind(this, frame)));
-		frame.preview = image.getContext("2d") || undefined;
-		setTimeout(() => frame.draw(this.ctx, this.brushManager, true));
-
-		const container = HTML.CreateElement(
-			"article",
-			HTML.AddClass("frame-preview"),
-			HTML.Append(
-				image,
-				HTML.CreateElement(
-					"footer",
-					HTML.Append(
-						HTML.CreateElement(
-							"button",
-							HTML.SetText("Remove"),
-							HTML.AddEventListener("click", () => {
-								const i = this.frames.findIndex(v => v === frame);
-								container.remove();
-								if (i === -1) return;
-								this.frames.splice(i, 1);
-								if (this.frames.length === 0) this.addFrame();
-								if (this.activeFrame === frame) this.setActive(this.frames[0]);
-							})
-						),
-						HTML.CreateElement(
-							"button",
-							HTML.SetText("Up"),
-							HTML.AddEventListener("click", () => {
-								const i = this.frames.findIndex(v => v === frame);
-								if (i === -1 || i === 0) return;
-								this.frames[i] = this.frames[i - 1];
-								this.frames[i - 1] = frame;
-								this.framesListContainer.insertBefore(container, container.previousElementSibling);
-							})
-						),
-						HTML.CreateElement(
-							"button",
-							HTML.SetText("Down"),
-							HTML.AddEventListener("click", () => {
-								const i = this.frames.findIndex(v => v === frame);
-								if (i === -1 || i === this.frames.length - 1) return;
-								this.frames[i] = this.frames[i + 1];
-								this.frames[i + 1] = frame;
-								this.framesListContainer.insertBefore(container, container.nextElementSibling!.nextElementSibling);
-							})
-						)
-					)
-				)
-			)
-		);
-		return container;
+	createContentView(content: TextContent): ContentPreview {
+		return new ContentPreview(content, patch => {
+			if (patch instanceof RemoveContent) {
+				if (this.state.activeText === content)
+					this.setActiveText(this.state.activeFrame.textContent.find(v => v !== content)!);
+			}
+			this.state.apply(patch);
+		});
 	}
-	crutchCounter = 0;
-	createTextView(text: TextContent) {
-		const textView = HTML.CreateElement(
-			"div",
-			HTML.AddEventListener("click", this.setActiveText.bind(this, text)),
-			HTML.SetText(text.main ? "Main" : `Text block ${this.crutchCounter++}`)
-		);
-		const container = HTML.CreateElement(
-			"article",
-			HTML.AddClass("frame-preview"),
-			HTML.Append(
-				textView,
-				HTML.CreateElement(
-					"footer",
-					HTML.Append(
-						...(text.main
-							? []
-							: [
-									HTML.CreateElement(
-										"button",
-										HTML.SetText("Remove"),
-										HTML.AddEventListener("click", () => {
-											const i = this.activeFrame.textContent.findIndex(v => v === text);
-											container.remove();
-											if (i === -1) return;
-											this.activeFrame.textContent.splice(i, 1);
-											if (this.activeFrame.textContent.length === 0) this.addText();
-											if (this.activeText === text) this.setActiveText(this.activeFrame.textContent[0]);
-											this.drawFrame(this.activeFrame);
-										})
-									),
-							  ]),
-						HTML.CreateElement(
-							"button",
-							HTML.SetText("Up"),
-							HTML.AddEventListener("click", () => {
-								const i = this.activeFrame.textContent.findIndex(v => v === text);
-								if (i === -1 || i === this.activeFrame.textContent.length - 1) return;
-								this.activeFrame.textContent[i] = this.activeFrame.textContent[i + 1];
-								this.activeFrame.textContent[i + 1] = text;
-								this.textsListContainer.insertBefore(container, container.nextElementSibling!.nextElementSibling);
-								this.drawFrame(this.activeFrame);
-							})
-						),
-						HTML.CreateElement(
-							"button",
-							HTML.SetText("Down"),
-							HTML.AddEventListener("click", () => {
-								const i = this.activeFrame.textContent.findIndex(v => v === text);
-								if (i === -1 || i === 0) return;
-								this.activeFrame.textContent[i] = this.activeFrame.textContent[i - 1];
-								this.activeFrame.textContent[i - 1] = text;
-								this.textsListContainer.insertBefore(container, container.previousElementSibling);
-								this.drawFrame(this.activeFrame);
-							})
-						)
-					)
-				)
-			)
-		);
-		return container;
-	}
+	downloadAndSetImage = (file: File) => {
+		return readBlobAsURL(file)
+			.then(downloadImage)
+			.then(img => {
+				this.state.apply(new ChangedData<State, ["activeFrame", ["image"]]>(["activeFrame", ["image"]], img));
+			});
+	};
 }
 
-function randomFrom<T>(arr: T[]): T {
+function contentBoxPatch(state: RectangleSide, to: Point): PatchData<ContentBox> {
+	if (state.none) return EmptyDiff;
+	const changes = new Array<ChangedData<ContentBox>>();
+	if (state.center) changes.push(new ChangedData(["x"], to.x), new ChangedData(["y"], to.y));
+	if (state.bottom) changes.push(new ChangedData(["bottom"], to.y));
+	if (state.top) changes.push(new ChangedData(["top"], to.y));
+	if (state.left) changes.push(new ChangedData(["left"], to.x));
+	if (state.right) changes.push(new ChangedData(["right"], to.x));
+	const patch = new BatchPatchData(...changes);
+	return patch;
+}
+
+export function randomFrom<T>(arr: T[]): T {
 	return arr[Math.floor(arr.length * Math.random())];
 }
-
-function getBlobFromCanvas(canvas: HTMLCanvasElement) {
-	return new Promise((resolve, reject) => {
-		canvas.toBlob(blob => {
-			if (!blob) {
-				reject(new Error(`Failed get blob`));
-				return;
-			}
-			resolve(blob);
-		});
-	});
+function addButton(text: string, action: () => void, destination: HTMLElement) {
+	HTML.CreateElement("button", HTML.SetText(text), HTML.AddEventListener("click", action), HTML.AppendTo(destination));
 }

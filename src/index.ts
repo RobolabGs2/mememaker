@@ -11,6 +11,7 @@ downloadImagesParcelRecord({
 		Object.fromEntries(
 			Object.entries(placeholders).map(([key, map]) => [key, Object.entries(map).map(([, img]) => img)])
 		) as Record<"downloading" | "empty", HTMLImageElement[]>,
-		patterns as Record<string, HTMLImageElement>
+		patterns as Record<string, HTMLImageElement>,
+		["Impact", "Lobster", "Arial", "Helvetica", "Next art", "Pacifico", "Caveat", "Comforter"]
 	);
 });

@@ -3,8 +3,8 @@
 	"version": "0.0.0",
 	"description": "Web app for create memes",
 	"scripts": {
-		"start": "parcel index.html",
-		"build": "parcel build index.html --public-url ./",
+		"start": "parcel *.pug",
+		"build": "parcel build index.pug --public-url ./",
 		"build:scss-types": "typed-scss-modules src --nameFormat none --exportType default",
 		"watch:scss-types": "typed-scss-modules src --nameFormat none --exportType default --watch",
 		"format": "prettier --check .",
@@ -18,6 +18,8 @@
 	"private": "true",
 	"devDependencies": {
 		"@parcel/resolver-glob": "^2.7.0",
+		"@parcel/transformer-pug": "^2.7.0",
+		"@parcel/transformer-raw": "^2.7.0",
 		"@parcel/transformer-sass": "^2.7.0",
 		"@typescript-eslint/eslint-plugin": "^5.34.0",
 		"@typescript-eslint/parser": "^5.34.0",
@@ -36,7 +38,7 @@
 	},
 	"@parcel/transformer-css": {
 		"cssModules": {
-			"global": true
+			"global": false
 		}
 	}
 }

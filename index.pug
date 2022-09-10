@@ -1,0 +1,25 @@
+html(lang="en")
+    head
+        meta(charset="UTF-8")
+        meta(http-equiv="X-UA-Compatible" content="IE=edge")
+        meta(name="viewport" content="width=device-width, initial-scale=1.0")
+        title Mememaker
+        link(rel="icon" href="./assets/favicon.png")
+        link(
+            rel="stylesheet",
+            href="https://fonts.googleapis.com/css2?family=Lobster&family=Pacifico&family=Caveat&family=Comforter"
+        )
+        link(href="https://fonts.cdnfonts.com/css/next-art" rel="stylesheet")
+        link(href="https://fonts.cdnfonts.com/css/helvetica-255" rel="stylesheet")
+        link(href="./style.css" rel="stylesheet")
+    body
+        block scripts
+            script(src="./src/index.ts" type="module")
+        article
+            section(id="items")
+                section(id="frames" class="frames")
+                section(id="current-frame" class="frames")
+            section(id="display")
+                canvas(id="main")
+                canvas(id="ui")
+            section(id="properties")
