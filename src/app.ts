@@ -1,16 +1,7 @@
 import * as HTML from "./html";
 import { downloadBlobAs, downloadImage, readBlobAsURL } from "./http_helpers";
 
-import {
-	BrushManager,
-	ContentBox,
-	DefaultStyle,
-	Frame,
-	RectangleSide,
-	resizeCanvas,
-	TextContent,
-	TextStylePrototype,
-} from "./frame";
+import { ContentBox, Frame, RectangleSide, resizeCanvas, TextContent } from "./frame";
 import { TextSettingsForm } from "./ui/inputs/text_settings_input";
 import { BrushInput } from "./ui/inputs/brush_input";
 import { BatchPatchData, ChangedData, DelegatePatch, PatchData } from "./patch";
@@ -38,6 +29,11 @@ import { CanvasCursor } from "./ui/cursor";
 import TextInput from "./ui/inputs/text_input";
 import FilesInput from "./ui/inputs/file_input";
 import { Point } from "./ui/inputs/point_input";
+import { BrushManager } from "./brush";
+import { TextStylePrototype, DefaultStyle } from "./text_style";
+import Polygon from "./geometry/polygon";
+import { Matrix } from "./geometry/matrix";
+import Sprite, { SpriteSystem } from "./graphics/sprite";
 
 export class DrawContext {
 	constructor(
@@ -66,6 +62,88 @@ export class DrawContext {
 	}
 }
 
+interface ContentModifier<T extends object> {
+	select(content: T, cursor: CanvasCursor): boolean;
+	draw(content: T, ctx: CanvasRenderingContext2D, cursor: CanvasCursor, active: boolean): void;
+	patch(content: T, cursor: CanvasCursor): PatchData<T>;
+	release(): void;
+}
+
+class MoveContentBox implements ContentModifier<ContentBox> {
+	select(content: ContentBox, cursor: CanvasCursor): boolean {
+		this.state = content.checkPoint(cursor.position.x, cursor.position.y);
+		return !this.state.none;
+	}
+	state: ReturnType<ContentBox["checkPoint"]> = {
+		bottom: false,
+		center: false,
+		left: false,
+		none: true,
+		right: false,
+		top: false,
+	};
+	draw(content: ContentBox, ctx: CanvasRenderingContext2D, cursor: CanvasCursor, active: boolean): void {
+		if (!active) content.checkPoint(cursor.position.x, cursor.position.y);
+		content.draw(ctx, "#FF00AA", active ? "#FF0000AA" : "#FFAA44");
+	}
+	patch(content: ContentBox, cursor: CanvasCursor): PatchData<ContentBox> {
+		return contentBoxMovePatch(this.state, cursor.position);
+	}
+	release(): void {
+		this.state.none = true;
+	}
+}
+
+class RotateContentBox implements ContentModifier<ContentBox> {
+	constructor(readonly brushManager: BrushManager, readonly textStyle: TextStylePrototype) {}
+	select(content: ContentBox, cursor: CanvasCursor): boolean {
+		const dx = cursor.position.x - content.x;
+		const dy = cursor.position.y - content.y;
+		const ringSize = this.ringSize(cursor);
+		const radius = this.radius(content);
+		return Math.sqrt(radius - Math.sqrt(dx * dx + dy * dy)) <= ringSize;
+	}
+	ringSize(cursor: CanvasCursor) {
+		return cursor.scale * 8;
+	}
+	radius(content: ContentBox): number {
+		return Math.sqrt((content.width * content.width) / 4 + (content.height * content.height) / 4);
+	}
+	draw(content: ContentBox, ctx: CanvasRenderingContext2D, cursor: CanvasCursor, active: boolean): void {
+		const box = content;
+		const canvasScale = cursor.scale;
+		const radius = this.radius(content);
+		if (!active) {
+			ctx.beginPath();
+			ctx.arc(box.x, box.y, radius, 0, 2 * Math.PI);
+			ctx.strokeStyle = this.select(content, cursor) ? "#FF0000" : "#FFAA44AA";
+			ctx.lineWidth = this.ringSize(cursor);
+			ctx.stroke();
+			return;
+		}
+		ctx.strokeStyle = "#FF00AA";
+		ctx.beginPath();
+		ctx.moveTo(cursor.position.x, cursor.position.y);
+		ctx.lineTo(box.x, box.y);
+		ctx.lineTo(box.x + (box.width * 2) / 3, box.y);
+		ctx.stroke();
+		const angle = (360 - (angleByTwoPoints(box, cursor.position) / Math.PI) * 180) % 360;
+		ctx.beginPath();
+		ctx.arc(box.x, box.y, radius, 0, -(angle / 180) * Math.PI, true);
+		ctx.strokeStyle = active ? "#FF0000AA" : "#FFAA44";
+		ctx.stroke();
+		this.brushManager.setupCtxForText(ctx, this.textStyle, 16 * canvasScale);
+		ctx.strokeText(angle.toFixed(2), box.x, box.y);
+		ctx.fillText(angle.toFixed(2), box.x, box.y);
+	}
+	patch(content: ContentBox, cursor: CanvasCursor): PatchData<ContentBox> {
+		return contentBoxRotatePatch(content, cursor.position);
+	}
+	release(): void {
+		return;
+	}
+}
+
 export class App {
 	private state: State;
 	private ctx: DrawContext;
@@ -83,28 +161,75 @@ export class App {
 	}
 
 	cursor: CanvasCursor;
+	tools: ContentModifier<ContentBox>[];
+	activeTool?: ContentModifier<ContentBox>;
 	private framesViews: PreviewListContainer<Frame>;
 	private contentViews: PreviewListContainer<TextContent>;
+	polygons = [
+		new Polygon([
+			{ x: 100, y: 200 },
+			{ x: 200, y: 300 },
+			{ x: 90, y: 400 },
+		]),
+		new Polygon([
+			{ x: 300, y: 200 },
+			{ x: 400, y: 200 },
+			{ x: 400, y: 400 },
+			{ x: 300, y: 400 },
+		]),
+	];
+	sprites: SpriteSystem;
+	uiTextStyle: TextStylePrototype = {
+		font: { bold: true, italic: false, smallCaps: false, family: "monoscape" },
+		case: "As is",
+		fill: { name: "#FFFFFF", type: "color", patternSettings: { rotate: 0, scale: "font", shift: { x: 0, y: 0 } } },
+		stroke: { name: "#000000", type: "color", patternSettings: { rotate: 0, scale: "font", shift: { x: 0, y: 0 } } },
+		name: "ui",
+	};
+	rotationM = Matrix.Rotation((Math.PI / 3600) * 2);
 	uiDraw() {
 		for (let i = 0; i < this.state.appliedOperations.length; i++) {
 			const { diff: patch, op } = this.state.appliedOperations[i];
 			this.drawPatchHandler(patch, op !== "do");
 		}
 		this.state.appliedOperations.length = 0;
-		resizeCanvas(this.ctx.ui.canvas, this.ctx.main.canvas);
-		this.ctx.ui.clearRect(0, 0, this.ctx.width, this.ctx.height);
-		if (this.state.activeText.main) return;
+		const canvas = this.ctx.ui.canvas;
+		resizeCanvas(canvas, { width: this.ctx.main.canvas.clientWidth, height: this.ctx.main.canvas.clientHeight });
+		const ctx = this.ctx.ui;
+		const cursor = this.cursor;
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+		ctx.save();
+		const scale = 1 / cursor.scale;
+		ctx.scale(scale, scale);
+		ctx.fillStyle = "#FF0000";
+		ctx.fillRect(cursor.position.x, cursor.position.y, 10, 10);
+		ctx.lineWidth = 2;
+
+		this.sprites.draw(ctx);
+		if (this.state.activeText.main) {
+			ctx.restore();
+			return;
+		}
 		const box = this.state.activeText.box;
-		if (this.cursor.moveStart) {
-			const state = box.checkPoint(this.cursor.moveStart.x, this.cursor.moveStart.y);
-			const patch = contentBoxPatch(state, this.cursor.position);
+
+		if (this.activeTool) {
+			const patch = this.activeTool.patch(box, cursor);
 			const revert = patch.apply(box);
-			box.draw(this.ctx.ui, "#FF00AA", "#FF0000AA", 3);
+			ctx.save();
+			this.activeTool.draw(box, ctx, cursor, true);
+			ctx.restore();
+			ctx.save();
+			box.draw(ctx, "#FFaa99", "#00000000");
+			ctx.restore();
 			revert.apply(box);
 		} else {
-			box.checkPoint(this.cursor.position.x, this.cursor.position.y);
-			box.draw(this.ctx.ui, "#FF00AA", "#FFAA44", 3);
+			this.tools.forEach(tool => {
+				ctx.save();
+				tool.draw(box, ctx, cursor, false);
+				ctx.restore();
+			});
 		}
+		ctx.restore();
 	}
 	private brushManager: BrushManager;
 	onChangeActiveFrame = new Array<(app: App) => void>();
@@ -125,21 +250,32 @@ export class App {
 		requestAnimationFrame(animationFrame);
 		const canvas = document.querySelector("canvas#main") as HTMLCanvasElement;
 		const canvasUI = document.querySelector("canvas#ui") as HTMLCanvasElement;
-		this.cursor = new CanvasCursor(canvas, (from, to) => {
-			const state = this.state.activeText.box.checkPoint(from.x, from.y);
-			this.state.apply(
-				new DelegatePatch<State, ["activeText", ["box"]], ContentBox>(
-					["activeText", ["box"]],
-					contentBoxPatch(state, to)
-				)
-			);
-		});
+		this.sprites = new SpriteSystem(canvas);
+		this.polygons.forEach(p => this.sprites.add(new Sprite(p)));
+		this.cursor = this.sprites.cursor;
+		// this.cursor = new CanvasCursor(
+		// 	canvas,
+		// 	(from, keys) => {
+		// 		this.activeTool = this.tools.find(tool => tool.select(this.state.activeText.box, this.cursor));
+		// 	},
+		// 	(from, to, keys) => {
+		// 		if (!this.activeTool) return;
+		// 		this.state.apply(
+		// 			new DelegatePatch<State, ["activeText", ["box"]], ContentBox>(
+		// 				["activeText", ["box"]],
+		// 				this.activeTool.patch(this.state.activeText.box, this.cursor)
+		// 			)
+		// 		);
+		// 		this.activeTool = undefined;
+		// 	}
+		// );
 		this.ctx = new DrawContext(
 			canvas.getContext("2d")!,
 			canvasUI.getContext("2d")!,
 			document.createElement("canvas").getContext("2d")!
 		);
 		this.brushManager = new BrushManager(this.ctx.offscreen, patternsImages);
+		this.tools = [new MoveContentBox(), new RotateContentBox(this.brushManager, this.uiTextStyle)];
 		this.framesViews = new PreviewListContainer(frame => this.createFrameView(frame), this.brushManager);
 		this.contentViews = new PreviewListContainer(content => this.createContentView(content), this.brushManager);
 		const framesContainer = document.querySelector("section#frames") as HTMLElement;
@@ -372,7 +508,7 @@ export class App {
 	};
 }
 
-function contentBoxPatch(state: RectangleSide, to: Point): PatchData<ContentBox> {
+function contentBoxMovePatch(state: RectangleSide, to: Point): PatchData<ContentBox> {
 	if (state.none) return EmptyDiff;
 	const changes = new Array<ChangedData<ContentBox>>();
 	if (state.center) changes.push(new ChangedData(["x"], to.x), new ChangedData(["y"], to.y));
@@ -384,6 +520,15 @@ function contentBoxPatch(state: RectangleSide, to: Point): PatchData<ContentBox>
 	return patch;
 }
 
+function contentBoxRotatePatch(box: ContentBox, to: Point): PatchData<ContentBox> {
+	return new ChangedData<ContentBox>(["rotation"], angleByTwoPoints(box, to));
+}
+
+function angleByTwoPoints(p1: Point, p2: Point) {
+	const dx = p2.x - p1.x;
+	const dy = p2.y - p1.y;
+	return Math.atan2(dy, dx);
+}
 export function randomFrom<T>(arr: T[]): T {
 	return arr[Math.floor(arr.length * Math.random())];
 }

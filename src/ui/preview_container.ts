@@ -1,4 +1,4 @@
-import { BrushManager } from "../frame";
+import { BrushManager } from "../brush";
 import * as HTML from "../html";
 
 interface PreviewComponent {

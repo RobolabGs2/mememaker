@@ -6,29 +6,45 @@ export class CanvasCursor {
 		return this.moveStart !== undefined;
 	}
 	moveStart?: Point;
-	constructor(canvas: HTMLCanvasElement, onMoveFinish: (from: Point, to: Point) => void) {
+	ctrl = false;
+	shift = false;
+	get scale(): number {
+		const canvas = this.canvas;
+		return canvas.width / canvas.clientWidth;
+	}
+	constructor(
+		private canvas: HTMLCanvasElement,
+		onMoveStart: (from: Point, keys: { readonly ctrl: boolean; readonly shift: boolean }) => void,
+		onMoveFinish: (from: Point, to: Point, keys: { readonly ctrl: boolean; readonly shift: boolean }) => void
+	) {
 		canvas.addEventListener("mousemove", ev => {
-			const scaleX = canvas.width / canvas.clientWidth;
-			const scaleY = canvas.height / canvas.clientHeight;
-			this.position.x = ev.offsetX * scaleX;
-			this.position.y = ev.offsetY * scaleY;
+			const scale = this.scale;
+			this.position.x = ev.offsetX * scale;
+			this.position.y = ev.offsetY * scale;
+			this.ctrl = ev.ctrlKey;
+			this.shift = ev.ctrlKey;
 		});
 		canvas.addEventListener("mousedown", ev => {
 			if (ev.button !== 0) return;
-			const scaleX = canvas.width / canvas.clientWidth;
-			const scaleY = canvas.height / canvas.clientHeight;
-			this.position.x = ev.offsetX * scaleX;
-			this.position.y = ev.offsetY * scaleY;
-			if (!this.pressed) this.moveStart = { ...this.position };
+			const scale = this.scale;
+			this.position.x = ev.offsetX * scale;
+			this.position.y = ev.offsetY * scale;
+			if (!this.pressed) {
+				this.moveStart = { ...this.position };
+				onMoveStart(this.moveStart, this);
+			}
+			this.ctrl = ev.ctrlKey;
+			this.shift = ev.ctrlKey;
 		});
 		canvas.addEventListener("mouseup", ev => {
 			if (ev.button !== 0) return;
-			const scaleX = canvas.width / canvas.clientWidth;
-			const scaleY = canvas.height / canvas.clientHeight;
-			this.position.x = ev.offsetX * scaleX;
-			this.position.y = ev.offsetY * scaleY;
+			const scale = this.scale;
+			this.position.x = ev.offsetX * scale;
+			this.position.y = ev.offsetY * scale;
+			this.ctrl = ev.ctrlKey;
+			this.shift = ev.ctrlKey;
 			if (this.moveStart) {
-				onMoveFinish(this.moveStart, this.position);
+				onMoveFinish(this.moveStart, this.position, this);
 				this.moveStart = undefined;
 			}
 		});
