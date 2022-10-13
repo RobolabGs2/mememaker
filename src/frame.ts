@@ -3,6 +3,7 @@
 // }
 
 import { BrushManager } from "./brush";
+import { RectangleSprite, Transform } from "./graphics/sprite";
 import {
 	TextStylePrototype,
 	textToCase,
@@ -23,113 +24,6 @@ export class Line {
 	constructor(readonly p1: Point, readonly p2: Point) {}
 }
 
-export class Rectangle {
-	constructor(public x: number, public y: number, public width: number, public height: number) {}
-	public get left(): number {
-		return this.x - this.width / 2;
-	}
-	public set left(n: number) {
-		this.width = Math.abs((this.x - n) * 2);
-	}
-	public get right(): number {
-		return this.x + this.width / 2;
-	}
-	public set right(n: number) {
-		this.width = Math.abs((n - this.x) * 2);
-	}
-	public get top(): number {
-		return this.y - this.height / 2;
-	}
-	public set top(n: number) {
-		this.height = Math.abs((this.y - n) * 2);
-	}
-	public get bottom(): number {
-		return this.y + this.height / 2;
-	}
-	public set bottom(n: number) {
-		this.height = Math.abs((n - this.y) * 2);
-	}
-	public contains(x: number, y: number) {
-		return !(x < this.left || this.right < x || y < this.top || y > this.bottom);
-	}
-}
-
-export class ContentBox extends Rectangle {
-	constructor(x: number, y: number, width: number, height: number) {
-		super(x, y, width, height);
-	}
-	public rotation = Math.PI / 4;
-	draw(ctx: CanvasRenderingContext2D, color: string, colorSelected: string, lineWidth = 2): void {
-		ctx.translate(this.x, this.y);
-		ctx.rotate(this.rotation);
-		ctx.strokeStyle = color;
-		ctx.fillStyle = color;
-		ctx.lineWidth = lineWidth;
-		const left = -this.width / 2;
-		const right = this.width / 2;
-		const top = -this.height / 2;
-		const bottom = this.height / 2;
-		ctx.strokeRect(left, top, this.width, this.height);
-		if (!this.selectedSides.none) {
-			ctx.fillStyle = ctx.strokeStyle = colorSelected;
-			ctx.lineWidth = lineWidth + 6;
-			if (this.selectedSides.center) {
-				this.updateCenter();
-				ctx.fillRect(-this.center.width / 2, -this.center.height / 2, this.center.width, this.center.height);
-			}
-			if (this.selectedSides.top) {
-				ctx.beginPath();
-				ctx.moveTo(left, top);
-				ctx.lineTo(right, top);
-				ctx.stroke();
-			}
-			if (this.selectedSides.bottom) {
-				ctx.beginPath();
-				ctx.moveTo(left, bottom);
-				ctx.lineTo(right, bottom);
-				ctx.stroke();
-			}
-			if (this.selectedSides.left) {
-				ctx.beginPath();
-				ctx.moveTo(left, top);
-				ctx.lineTo(left, bottom);
-				ctx.stroke();
-			}
-			if (this.selectedSides.right) {
-				ctx.beginPath();
-				ctx.moveTo(right, top);
-				ctx.lineTo(right, bottom);
-				ctx.stroke();
-			}
-		}
-	}
-	private center = new Rectangle(0, 0, 0, 0);
-	private selectedSides: RectangleSide = {
-		bottom: false,
-		left: false,
-		right: false,
-		top: false,
-		center: false,
-		none: true,
-	};
-	private updateCenter() {
-		this.center.x = this.x;
-		this.center.y = this.y;
-		this.center.height = this.height / 2;
-		this.center.width = this.width / 2;
-	}
-	checkPoint(x: number, y: number): RectangleSide {
-		if ((this.selectedSides.none = !this.contains(x, y))) return this.selectedSides;
-		this.updateCenter();
-		this.selectedSides.center = this.center.contains(x, y);
-		this.selectedSides.top = this.center.top > y;
-		this.selectedSides.bottom = this.center.bottom < y;
-		this.selectedSides.left = this.center.left > x;
-		this.selectedSides.right = this.center.right < x;
-		return this.selectedSides;
-	}
-}
-
 interface Point {
 	x: number;
 	y: number;
@@ -145,14 +39,19 @@ export function resizeCanvas(canvas: HTMLCanvasElement, size: { width: number; h
 }
 
 export class TextContent {
-	constructor(public box: ContentBox, public text: string, public style: TextStylePrototype, public main = false) {}
+	constructor(
+		public box: RectangleSprite,
+		public text: string,
+		public style: TextStylePrototype,
+		public main = false
+	) {}
 	draw(ctx: CanvasRenderingContext2D, brushManager: BrushManager): void {
 		const text = textToCase(this.text, this.style.case).split("\n");
 		const { lines, fontSize } = this.getTextCoords(ctx, text);
 		brushManager.setupCtxForText(ctx, this.style, fontSize);
 		if (!this.main) {
 			ctx.translate(this.box.x, this.box.y);
-			ctx.rotate(this.box.rotation);
+			ctx.rotate(this.box.transform.rotate);
 			ctx.translate(-this.box.x, -this.box.y);
 		}
 		text.forEach((line, i) => {
@@ -197,7 +96,7 @@ export class TextContent {
 		ctx: CanvasRenderingContext2D,
 		font: FontSettings,
 		text: string[],
-		box: ContentBox
+		box: RectangleSprite
 	): { lines: Point[]; fontSize: number } {
 		const [fontSize, totalHeight] = calcFontSize(ctx, text, font, this.box);
 		const x = box.x;
@@ -249,11 +148,13 @@ export class Frame {
 	constructor(public image: HTMLImageElement, text: string) {
 		this.textContent.push(
 			new TextContent(
-				new ContentBox(
+				new RectangleSprite(
 					this.image.width / 2,
 					this.image.height - (this.image.height * 0.34) / 2,
 					this.image.width * 0.97,
-					this.image.height * 0.34
+					this.image.height * 0.34,
+					0,
+					{ fill: {}, stroke: {} }
 				),
 				text,
 				DefaultStyle(),
@@ -282,7 +183,7 @@ function calcFontSize(
 	ctx: CanvasRenderingContext2D,
 	lines: string[],
 	font: FontSettings,
-	box: ContentBox
+	box: RectangleSprite
 ): [number, number] {
 	let maxLine = lines[0];
 	let maxWidth = 0;

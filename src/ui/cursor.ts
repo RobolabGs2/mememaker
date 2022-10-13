@@ -22,7 +22,7 @@ export class CanvasCursor {
 			this.position.x = ev.offsetX * scale;
 			this.position.y = ev.offsetY * scale;
 			this.ctrl = ev.ctrlKey;
-			this.shift = ev.ctrlKey;
+			this.shift = ev.shiftKey;
 		});
 		canvas.addEventListener("mousedown", ev => {
 			if (ev.button !== 0) return;
@@ -34,7 +34,7 @@ export class CanvasCursor {
 				onMoveStart(this.moveStart, this);
 			}
 			this.ctrl = ev.ctrlKey;
-			this.shift = ev.ctrlKey;
+			this.shift = ev.shiftKey;
 		});
 		canvas.addEventListener("mouseup", ev => {
 			if (ev.button !== 0) return;
@@ -42,7 +42,7 @@ export class CanvasCursor {
 			this.position.x = ev.offsetX * scale;
 			this.position.y = ev.offsetY * scale;
 			this.ctrl = ev.ctrlKey;
-			this.shift = ev.ctrlKey;
+			this.shift = ev.shiftKey;
 			if (this.moveStart) {
 				onMoveFinish(this.moveStart, this.position, this);
 				this.moveStart = undefined;

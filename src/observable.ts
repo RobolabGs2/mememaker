@@ -3,8 +3,10 @@ type MapOfArrays<T> = {
 };
 
 export type EventHandler<T, This = unknown, Return = void> = {
-	[K in keyof T]: (this: This, data: T[K]) => Return;
+	[K in keyof T]: T[K] extends unknown[] ? (this: This, ...data: T[K]) => Return : never;
 };
+
+type EventArgs<Map, Key extends keyof Map> = Map[Key] extends unknown[] ? Map[Key] : never;
 
 type ListenersMap<EventsMap, This = unknown> = MapOfArrays<EventHandler<EventsMap, This>>;
 
@@ -25,7 +27,7 @@ export default class Observable<EventsMap> {
 	): void {
 		this.listeners[eventType]?.delete(listener);
 	}
-	protected dispatchEvent<E extends keyof EventsMap>(eventType: E, event: EventsMap[E]) {
-		this.listeners[eventType]?.forEach(listener => listener.call(this as unknown as this, event));
+	public dispatchEvent<E extends keyof EventsMap>(eventType: E, ...event: EventArgs<EventsMap, E>) {
+		this.listeners[eventType]?.forEach(listener => listener.apply(this as unknown as this, event));
 	}
 }

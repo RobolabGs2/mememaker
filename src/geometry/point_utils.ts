@@ -17,3 +17,9 @@ export function length({ x, y }: Point) {
 export function multiply(n: number, { x, y }: Point): Point {
 	return { x: n * x, y: n * y };
 }
+export function vector(from: Point, to: Point): Point {
+	return { x: to.x - from.x, y: to.y - from.y };
+}
+export function scalar(v1: Point, v2: Point): number {
+	return v1.x * v2.x + v1.y * v2.y;
+}
