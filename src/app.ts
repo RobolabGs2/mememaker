@@ -1,16 +1,7 @@
 import * as HTML from "./html";
 import { downloadBlobAs, downloadImage, readBlobAsURL } from "./http_helpers";
 
-import {
-	BrushManager,
-	ContentBox,
-	DefaultStyle,
-	Frame,
-	RectangleSide,
-	resizeCanvas,
-	TextContent,
-	TextStylePrototype,
-} from "./frame";
+import { Frame, resizeCanvas, TextContent } from "./frame";
 import { TextSettingsForm } from "./ui/inputs/text_settings_input";
 import { BrushInput } from "./ui/inputs/brush_input";
 import { BatchPatchData, ChangedData, DelegatePatch, PatchData } from "./patch";
@@ -26,7 +17,6 @@ import {
 	ShiftContent,
 	makeDiffHandler,
 	StateDiffListener,
-	EmptyDiff,
 	RemoveContent,
 } from "./state";
 import { Meme } from "./meme";
@@ -38,6 +28,22 @@ import { CanvasCursor } from "./ui/cursor";
 import TextInput from "./ui/inputs/text_input";
 import FilesInput from "./ui/inputs/file_input";
 import { Point } from "./ui/inputs/point_input";
+import { BrushManager } from "./brush";
+import { TextStylePrototype, DefaultStyle } from "./text_style";
+import { Matrix } from "./geometry/matrix";
+import {
+	arrowPolygon,
+	circleArrowPolygon,
+	createRectangle,
+	DragAndDropCalculatedPolygon,
+	DragAndDropPolygon,
+	DynamicTransform,
+	RectangleSprite,
+	Sprite,
+	SpriteSystem,
+	Transform,
+} from "./graphics/sprite";
+import * as PointUtils from "./geometry/point_utils";
 
 export class DrawContext {
 	constructor(
@@ -66,6 +72,63 @@ export class DrawContext {
 	}
 }
 
+interface ContentModifier<T extends object> {
+	select(content: T, cursor: CanvasCursor): boolean;
+	draw(content: T, ctx: CanvasRenderingContext2D, cursor: CanvasCursor, active: boolean): void;
+	patch(content: T, cursor: CanvasCursor): PatchData<T>;
+	release(): void;
+}
+
+// class RotateContentBox implements ContentModifier<ContentBox> {
+// 	constructor(readonly brushManager: BrushManager, readonly textStyle: TextStylePrototype) {}
+// 	select(content: ContentBox, cursor: CanvasCursor): boolean {
+// 		const dx = cursor.position.x - content.x;
+// 		const dy = cursor.position.y - content.y;
+// 		const ringSize = this.ringSize(cursor);
+// 		const radius = this.radius(content);
+// 		return Math.sqrt(radius - Math.sqrt(dx * dx + dy * dy)) <= ringSize;
+// 	}
+// 	ringSize(cursor: CanvasCursor) {
+// 		return cursor.scale * 8;
+// 	}
+// 	radius(content: ContentBox): number {
+// 		return Math.sqrt((content.width * content.width) / 4 + (content.height * content.height) / 4);
+// 	}
+// 	draw(content: ContentBox, ctx: CanvasRenderingContext2D, cursor: CanvasCursor, active: boolean): void {
+// 		const box = content;
+// 		const canvasScale = cursor.scale;
+// 		const radius = this.radius(content);
+// 		if (!active) {
+// 			ctx.beginPath();
+// 			ctx.arc(box.x, box.y, radius, 0, 2 * Math.PI);
+// 			ctx.strokeStyle = this.select(content, cursor) ? "#FF0000" : "#FFAA44AA";
+// 			ctx.lineWidth = this.ringSize(cursor);
+// 			ctx.stroke();
+// 			return;
+// 		}
+// 		ctx.strokeStyle = "#FF00AA";
+// 		ctx.beginPath();
+// 		ctx.moveTo(cursor.position.x, cursor.position.y);
+// 		ctx.lineTo(box.x, box.y);
+// 		ctx.lineTo(box.x + (box.width * 2) / 3, box.y);
+// 		ctx.stroke();
+// 		const angle = (360 - (angleByTwoPoints(box, cursor.position) / Math.PI) * 180) % 360;
+// 		ctx.beginPath();
+// 		ctx.arc(box.x, box.y, radius, 0, -(angle / 180) * Math.PI, true);
+// 		ctx.strokeStyle = active ? "#FF0000AA" : "#FFAA44";
+// 		ctx.stroke();
+// 		this.brushManager.setupCtxForText(ctx, this.textStyle, 16 * canvasScale);
+// 		ctx.strokeText(angle.toFixed(2), box.x, box.y);
+// 		ctx.fillText(angle.toFixed(2), box.x, box.y);
+// 	}
+// 	patch(content: ContentBox, cursor: CanvasCursor): PatchData<ContentBox> {
+// 		return contentBoxRotatePatch(content, cursor.position);
+// 	}
+// 	release(): void {
+// 		return;
+// 	}
+// }
+
 export class App {
 	private state: State;
 	private ctx: DrawContext;
@@ -85,26 +148,43 @@ export class App {
 	cursor: CanvasCursor;
 	private framesViews: PreviewListContainer<Frame>;
 	private contentViews: PreviewListContainer<TextContent>;
+	sprites: SpriteSystem;
+	uiTextStyle: TextStylePrototype = {
+		font: { bold: true, italic: false, smallCaps: false, family: "monoscape" },
+		case: "As is",
+		fill: { name: "#FFFFFF", type: "color", patternSettings: { rotate: 0, scale: "font", shift: { x: 0, y: 0 } } },
+		stroke: { name: "#000000", type: "color", patternSettings: { rotate: 0, scale: "font", shift: { x: 0, y: 0 } } },
+		name: "ui",
+	};
+	rotationM = Matrix.Rotation((Math.PI / 3600) * 2);
 	uiDraw() {
 		for (let i = 0; i < this.state.appliedOperations.length; i++) {
 			const { diff: patch, op } = this.state.appliedOperations[i];
 			this.drawPatchHandler(patch, op !== "do");
 		}
 		this.state.appliedOperations.length = 0;
-		resizeCanvas(this.ctx.ui.canvas, this.ctx.main.canvas);
-		this.ctx.ui.clearRect(0, 0, this.ctx.width, this.ctx.height);
-		if (this.state.activeText.main) return;
-		const box = this.state.activeText.box;
-		if (this.cursor.moveStart) {
-			const state = box.checkPoint(this.cursor.moveStart.x, this.cursor.moveStart.y);
-			const patch = contentBoxPatch(state, this.cursor.position);
-			const revert = patch.apply(box);
-			box.draw(this.ctx.ui, "#FF00AA", "#FF0000AA", 3);
-			revert.apply(box);
-		} else {
-			box.checkPoint(this.cursor.position.x, this.cursor.position.y);
-			box.draw(this.ctx.ui, "#FF00AA", "#FFAA44", 3);
+		const canvas = this.ctx.ui.canvas;
+		resizeCanvas(canvas, { width: this.ctx.main.canvas.clientWidth, height: this.ctx.main.canvas.clientHeight });
+		const ctx = this.ctx.ui;
+		const cursor = this.cursor;
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+		ctx.save();
+		const scale = 1 / cursor.scale;
+		ctx.scale(scale, scale);
+		ctx.fillStyle = "#FF0000";
+		// ctx.fillRect(cursor.position.x, cursor.position.y, 10, 10);
+		if (cursor.moveStart) {
+			ctx.fillStyle = "#FF00FF";
+			// ctx.fillRect(cursor.moveStart.x, cursor.moveStart.y, 10, 10);
 		}
+		ctx.lineWidth = 2;
+
+		this.sprites.draw(ctx);
+		if (this.state.activeText.main) {
+			ctx.restore();
+			return;
+		}
+		ctx.restore();
 	}
 	private brushManager: BrushManager;
 	onChangeActiveFrame = new Array<(app: App) => void>();
@@ -125,15 +205,29 @@ export class App {
 		requestAnimationFrame(animationFrame);
 		const canvas = document.querySelector("canvas#main") as HTMLCanvasElement;
 		const canvasUI = document.querySelector("canvas#ui") as HTMLCanvasElement;
-		this.cursor = new CanvasCursor(canvas, (from, to) => {
-			const state = this.state.activeText.box.checkPoint(from.x, from.y);
-			this.state.apply(
-				new DelegatePatch<State, ["activeText", ["box"]], ContentBox>(
-					["activeText", ["box"]],
-					contentBoxPatch(state, to)
-				)
-			);
+		this.sprites = new SpriteSystem(canvas, sprite => {
+			const getPatch = this.dragDropSystems.get(sprite);
+			if (!getPatch) return;
+			let lastPatch: PatchData<RectangleSprite> | undefined;
+			const state = this.state;
+			const box = state.activeText.box;
+			return {
+				move(from, to, cursor) {
+					if (lastPatch) lastPatch.apply(box);
+					const patch = getPatch(from, to, cursor, box);
+					lastPatch = patch.apply(box);
+				},
+				drop(from, to, cursor) {
+					if (lastPatch) lastPatch.apply(box);
+					const patch = getPatch(from, to, cursor, box);
+					state.apply(
+						new DelegatePatch<State, ["activeText", ["box"]], RectangleSprite>(["activeText", ["box"]], patch)
+					);
+				},
+			};
 		});
+		this.cursor = this.sprites.cursor;
+
 		this.ctx = new DrawContext(
 			canvas.getContext("2d")!,
 			canvasUI.getContext("2d")!,
@@ -325,8 +419,174 @@ export class App {
 			this.onChangeActiveFrame.forEach(v => v(this));
 			this.framesViews.focus(this.state.activeFrame);
 			this.contentViews.focus(this.state.activeText);
+			this.sprites.clear();
+			this.dragDropSystems.clear();
+			if (this.state.activeText.main) return;
+			const r = this.sprites.add(this.state.activeText.box);
+			const uiUnit = 18 * this.cursor.scale;
+			const array = arrowPolygon(uiUnit * 7, uiUnit * 1.4);
+			const reverseOnCtrl = new DynamicTransform(
+				() => 0,
+				() => 0,
+				() => (this.cursor.ctrl ? -r.transform.rotation() : 0),
+				r.transform
+			);
+			const arrX = this.sprites.add(
+				new DragAndDropPolygon(array, new Transform(0, 0, 0, reverseOnCtrl), true, alphaGradient("#0000ff"))
+			);
+			const arrY = this.sprites.add(
+				new DragAndDropPolygon(array, new Transform(0, 0, -Math.PI / 2, reverseOnCtrl), true, alphaGradient("#ff0000"))
+			);
+			function makeSystem(arrow: DragAndDropPolygon) {
+				return (from: Point, to: Point, cursor: CanvasCursor, box: RectangleSprite) => {
+					const dx = to.x - from.x;
+					const dy = to.y - from.y;
+					const { x, y } = box.transform;
+					const v = Matrix.Rotation(arrow.transform.rotation()).Transform({ x: 1, y: 0 });
+					let l = dx * v.x + dy * v.y;
+					if (cursor.shift) l = ((l / 10) | 0) * 10;
+					return new BatchPatchData<RectangleSprite>(
+						new ChangedData(["transform", ["x"]], x + v.x * l),
+						new ChangedData(["transform", ["y"]], y + v.y * l)
+					);
+				};
+			}
+			this.dragDropSystems.set(arrX, makeSystem(arrX));
+			this.dragDropSystems.set(arrY, makeSystem(arrY));
+			this.dragDropSystems.set(
+				this.sprites.add(
+					new DragAndDropPolygon(
+						createRectangle(uiUnit * 2, uiUnit * 2),
+						new Transform(0, 0, 0, r.transform),
+						true,
+						alphaGradient("#ff00ff")
+					)
+				),
+				(from: Point, to: Point, cursor: CanvasCursor, box: RectangleSprite) => {
+					const dx = to.x - from.x;
+					const dy = to.y - from.y;
+					const { x, y } = box.transform;
+					return new BatchPatchData<RectangleSprite>(
+						new ChangedData(["transform", ["x"]], x + dx),
+						new ChangedData(["transform", ["y"]], y + dy)
+					);
+				}
+			);
+			const arrRotate = this.sprites.add(
+				new DragAndDropPolygon(
+					circleArrowPolygon(4 * uiUnit, Math.PI * 1.5, uiUnit * 1.5),
+					new Transform(0, 0, -Math.PI / 4, r.transform),
+					true,
+					alphaGradient("#00ff00")
+				)
+			);
+			this.dragDropSystems.set(arrRotate, (from: Point, to: Point, cursor: CanvasCursor, box: RectangleSprite) => {
+				const { rotate } = box.transform;
+				const center = box.transform.matrix().Transform({ x: 0, y: 0 });
+				const v1 = PointUtils.vector(center, from);
+				const v2 = PointUtils.vector(center, to);
+				const a1 = Math.atan2(v1.y, v1.x);
+				const a2 = Math.atan2(v2.y, v2.x);
+				const delta = (Math.PI / 180) * 1;
+				let dRotate = Math.round((a2 - a1) / delta) * delta;
+				const step = Math.PI / 4;
+				if (cursor.shift) dRotate = ((dRotate / step) | 0) * step;
+				return new ChangedData<RectangleSprite>(["transform", ["rotate"]], cursor.ctrl ? dRotate : rotate + dRotate);
+			});
+
+			this.dragDropSystems.set(
+				this.sprites.add(
+					new DragAndDropCalculatedPolygon(
+						() => createRectangle(uiUnit, this.state.activeText.box.height - uiUnit),
+						new DynamicTransform(
+							() => this.state.activeText.box.width / 2,
+							() => 0,
+							() => 0,
+							r.transform
+						),
+						true,
+						alphaGradient("#ff9900")
+					)
+				),
+				sideResizePatchByUI("width", { x: 1, y: 0 })
+			);
+			this.dragDropSystems.set(
+				this.sprites.add(
+					new DragAndDropCalculatedPolygon(
+						() => createRectangle(uiUnit, this.state.activeText.box.height - uiUnit),
+						new DynamicTransform(
+							() => -this.state.activeText.box.width / 2,
+							() => 0,
+							() => 0,
+							r.transform
+						),
+						true,
+						alphaGradient("#ff9900")
+					)
+				),
+				sideResizePatchByUI("width", { x: -1, y: 0 })
+			);
+			this.dragDropSystems.set(
+				this.sprites.add(
+					new DragAndDropCalculatedPolygon(
+						() => createRectangle(this.state.activeText.box.width - uiUnit, uiUnit),
+						new DynamicTransform(
+							() => 0,
+							() => this.state.activeText.box.height / 2,
+							() => 0,
+							r.transform
+						),
+						true,
+						alphaGradient("#ff9900")
+					)
+				),
+				sideResizePatchByUI("height", { x: 0, y: 1 })
+			);
+			this.dragDropSystems.set(
+				this.sprites.add(
+					new DragAndDropCalculatedPolygon(
+						() => createRectangle(this.state.activeText.box.width - uiUnit, uiUnit),
+						new DynamicTransform(
+							() => 0,
+							() => -this.state.activeText.box.height / 2,
+							() => 0,
+							r.transform
+						),
+						true,
+						alphaGradient("#ff9900")
+					)
+				),
+				sideResizePatchByUI("height", { x: 0, y: -1 })
+			);
+			[
+				{ x: 1, y: 1 },
+				{ x: -1, y: 1 },
+				{ x: -1, y: -1 },
+				{ x: 1, y: -1 },
+			].forEach(dir => {
+				this.dragDropSystems.set(
+					this.sprites.add(
+						new DragAndDropPolygon(
+							createRectangle(uiUnit, uiUnit),
+							new DynamicTransform(
+								() => (dir.x * this.state.activeText.box.width) / 2,
+								() => (dir.y * this.state.activeText.box.height) / 2,
+								() => 0,
+								r.transform
+							),
+							true,
+							alphaGradient("#ff99ff")
+						)
+					),
+					resizePatchByUI(dir)
+				);
+			});
 		})
 	);
+	dragDropSystems = new Map<
+		Sprite,
+		(from: Point, to: Point, cursor: CanvasCursor, box: RectangleSprite) => PatchData<RectangleSprite>
+	>();
 	addFrame(img: HTMLImageElement = randomFrom(this.placeholders.empty)) {
 		const newFrame = new Frame(img, "");
 		this.state.apply(new AddFrame(newFrame));
@@ -335,7 +595,14 @@ export class App {
 	addText() {
 		const frame = this.state.activeFrame;
 		const newText = new TextContent(
-			new ContentBox(frame.image.width / 2, frame.image.height / 2, frame.image.width / 2, frame.image.height / 2),
+			new RectangleSprite(
+				frame.image.width / 2,
+				frame.image.height / 2,
+				frame.image.width / 2,
+				frame.image.height / 2,
+				0,
+				{ fill: {}, stroke: { default: "#aaaa00 " } }
+			),
 			"New text",
 			DefaultStyle()
 		);
@@ -372,16 +639,50 @@ export class App {
 	};
 }
 
-function contentBoxPatch(state: RectangleSide, to: Point): PatchData<ContentBox> {
-	if (state.none) return EmptyDiff;
-	const changes = new Array<ChangedData<ContentBox>>();
-	if (state.center) changes.push(new ChangedData(["x"], to.x), new ChangedData(["y"], to.y));
-	if (state.bottom) changes.push(new ChangedData(["bottom"], to.y));
-	if (state.top) changes.push(new ChangedData(["top"], to.y));
-	if (state.left) changes.push(new ChangedData(["left"], to.x));
-	if (state.right) changes.push(new ChangedData(["right"], to.x));
-	const patch = new BatchPatchData(...changes);
-	return patch;
+function sideResizePatchByUI(
+	side: "width" | "height",
+	dir: Point
+): (from: Point, to: Point, cursor: CanvasCursor, box: RectangleSprite) => PatchData<RectangleSprite> {
+	return (from: Point, to: Point, cursor: CanvasCursor, box: RectangleSprite) => {
+		const dx = to.x - from.x;
+		const dy = to.y - from.y;
+		const v = Matrix.Rotation(box.transform.rotation()).Transform(dir);
+		let l = dx * v.x + dy * v.y;
+		if (cursor.shift) l = ((l / 10) | 0) * 10;
+		if (!cursor.ctrl) return new ChangedData([side], box[side] + 2 * l);
+		return new BatchPatchData<RectangleSprite>(
+			new ChangedData(["transform", ["x"]], box.transform.x + (v.x * l) / 2),
+			new ChangedData(["transform", ["y"]], box.transform.y + (v.y * l) / 2),
+			new ChangedData([side], box[side] + l)
+		);
+	};
+}
+
+function resizePatchByUI(
+	dir: Point
+): (from: Point, to: Point, cursor: CanvasCursor, box: RectangleSprite) => PatchData<RectangleSprite> {
+	return (from: Point, to: Point, cursor: CanvasCursor, box: RectangleSprite) => {
+		const dx = to.x - from.x;
+		const dy = to.y - from.y;
+		const vv = Matrix.Rotation(box.transform.rotation()).Transform({ x: 0, y: dir.y });
+		const vh = Matrix.Rotation(box.transform.rotation()).Transform({ x: dir.x, y: 0 });
+		let lv = dx * vv.x + dy * vv.y;
+		let lh = dx * vh.x + dy * vh.y;
+		if (cursor.shift) {
+			lv = lh = Math.min(lv, lh);
+		}
+		if (!cursor.ctrl)
+			return new BatchPatchData<RectangleSprite>(
+				new ChangedData(["height"], box.height + 2 * lv),
+				new ChangedData(["width"], box.width + 2 * lh)
+			);
+		return new BatchPatchData<RectangleSprite>(
+			new ChangedData(["transform", ["x"]], box.transform.x + (vv.x * lv) / 2 + (vh.x * lh) / 2),
+			new ChangedData(["transform", ["y"]], box.transform.y + (vv.y * lv) / 2 + (vh.y * lh) / 2),
+			new ChangedData(["height"], box.height + lv),
+			new ChangedData(["width"], box.width + lh)
+		);
+	};
 }
 
 export function randomFrom<T>(arr: T[]): T {
@@ -389,4 +690,19 @@ export function randomFrom<T>(arr: T[]): T {
 }
 function addButton(text: string, action: () => void, destination: HTMLElement) {
 	HTML.CreateElement("button", HTML.SetText(text), HTML.AddEventListener("click", action), HTML.AppendTo(destination));
+}
+
+function alphaGradient(color: string) {
+	return {
+		fill: {
+			default: `${color}44`,
+			hover: `${color}99`,
+			active: `${color}`,
+		},
+		stroke: {
+			default: `${color}44`,
+			hover: `${color}99`,
+			active: `${color}`,
+		},
+	};
 }

@@ -1,6 +1,7 @@
 import * as HTML from "./html";
-import { BrushManager, Frame } from "./frame";
+import { Frame } from "./frame";
 import { SetActiveFrame, RemoveFrame, ShiftFrame, StateDiff } from "./state";
+import { BrushManager } from "./brush";
 
 export class FramePreview {
 	private preview: CanvasRenderingContext2D;

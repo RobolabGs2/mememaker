@@ -1,6 +1,6 @@
-import { TextStylePrototype } from "../../frame";
 import * as HTML from "../../html";
 import { PatchData, ChangedData, getValueByPath } from "../../patch";
+import { TextStylePrototype } from "../../text_style";
 import { ObjectInputComponent, Input } from "./input_component";
 import { Selector } from "./selector";
 import { SwitchButton } from "./switch_button";

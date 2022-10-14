@@ -1,4 +1,3 @@
-import { BrushPath } from "../../frame";
 import * as HTML from "../../html";
 import { PointInput } from "./point_input";
 import { Selector } from "./selector";
@@ -8,6 +7,7 @@ import { ColorInput } from "./color_input";
 import { NumberInput } from "./number_input";
 import { PatchData, BatchPatchData, ChangedData, DelegatePatch } from "../../patch";
 import { ObjectInputComponent } from "./input_component";
+import { BrushPath } from "../../brush";
 
 export class BrushInput implements ObjectInputComponent<BrushPath> {
 	inputs = {

@@ -1,6 +1,7 @@
 import * as HTML from "./html";
-import { BrushManager, TextContent } from "./frame";
+import { TextContent } from "./frame";
 import { StateDiff, SetActiveText, RemoveContent, ShiftContent } from "./state";
+import { BrushManager } from "./brush";
 
 export class ContentPreview {
 	private preview: HTMLDivElement;

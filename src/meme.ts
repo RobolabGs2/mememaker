@@ -1,5 +1,7 @@
 import JSZip from "jszip";
-import { Frame, TextContent, ContentBox, BrushManager } from "./frame";
+import { BrushManager } from "./brush";
+import { Frame, TextContent } from "./frame";
+import { RectangleSprite } from "./graphics/sprite";
 import { downloadImage } from "./http_helpers";
 
 export class Meme {
@@ -19,14 +21,48 @@ export class Meme {
 						const j = Number(images[i].name.substring(0, images[i].name.length - ".png".length));
 						const frameJSON = texts[j] as any;
 						if (version) {
-							if (version !== "v0.0.3") alert("UNKNOWN VERSION OF MEME PROJECT");
-							const textContent = frameJSON.textContent;
-							frames[j] = new Frame(img, "If you see this, please, contact with parrots");
-							frames[j].textContent = textContent.map((c: any) => {
-								const box = c.box;
-								const style = c.style;
-								return new TextContent(new ContentBox(box.x, box.y, box.width, box.height), c.text, style, c.main);
-							});
+							if (version === "v0.0.3") {
+								const textContent = frameJSON.textContent;
+								frames[j] = new Frame(img, "If you see this, please, contact with parrots");
+								frames[j].textContent = textContent.map((c: any) => {
+									const box = c.box;
+									const style = c.style;
+									return new TextContent(
+										new RectangleSprite(box.x, box.y, box.width, box.height, 0, {
+											fill: {},
+											stroke: { default: "#aaaa00 " },
+										}),
+										c.text,
+										style,
+										c.main
+									);
+								});
+							} else if (version === "v0.0.4") {
+								const textContent = frameJSON.textContent;
+								frames[j] = new Frame(img, "If you see this, please, contact with parrots");
+								frames[j].textContent = textContent.map((c: any) => {
+									const box = c.box;
+									const style = c.style;
+									return new TextContent(
+										new RectangleSprite(
+											box.transform.x,
+											box.transform.y,
+											box._width,
+											box._height,
+											box.transform.rotate,
+											{
+												fill: {},
+												stroke: { default: "#aaaa00 " },
+											}
+										),
+										c.text,
+										style,
+										c.main
+									);
+								});
+							} else {
+								alert("UNKNOWN VERSION OF MEME PROJECT");
+							}
 						} else {
 							frames[j] = new Frame(img, typeof frameJSON === "string" ? frameJSON : frameJSON.text);
 							if (typeof frameJSON !== "string") {
@@ -53,7 +89,7 @@ export class Meme {
 				});
 			})
 		).then(() => {
-			zip.file("text.json", JSON.stringify(frames), { comment: "v0.0.3" });
+			zip.file("text.json", JSON.stringify(frames), { comment: "v0.0.4" });
 			return zip.generateAsync({ type: "blob" });
 		});
 	}
@@ -78,7 +114,7 @@ export class Meme {
 	}
 }
 
-function getBlobFromCanvas(canvas: HTMLCanvasElement) {
+function getBlobFromCanvas(canvas: HTMLCanvasElement): Promise<Blob> {
 	return new Promise((resolve, reject) => {
 		canvas.toBlob(blob => {
 			if (!blob) {
