@@ -12,10 +12,25 @@ export class State {
 	activeFrame: Frame;
 	activeText: TextContent;
 
-	public appliedOperations = new Array<{ diff: StateDiff; op: "do" | "undo" | "redo" }>();
+	public appliedOperations = new Array<{ diff: StateDiff; op: "do" | "undo" | "redo" | "temporal" }>();
 	private operations = new Array<{ do: StateDiff; undo: StateDiff }>();
 	private lastOpIndex = -1;
+	private temporalPatch?: StateDiff;
+
+	undoTemporal() {
+		if (!this.temporalPatch) return;
+		this.temporalPatch.apply(this);
+		this.temporalPatch = undefined;
+	}
+	applyTemporal(patch: StateDiff) {
+		this.undoTemporal();
+		const undo = patch.apply(this);
+		if (undo === EmptyDiff) return;
+		this.appliedOperations.push({ diff: patch, op: "temporal" });
+		this.temporalPatch = undo;
+	}
 	apply(patch: StateDiff) {
+		this.undoTemporal();
 		const undo = patch.apply(this);
 		if (undo === EmptyDiff) return;
 		this.appliedOperations.push({ diff: patch, op: "do" });
@@ -25,6 +40,7 @@ export class State {
 		this.lastOpIndex = this.operations.length - 1;
 	}
 	undo() {
+		this.undoTemporal();
 		if (this.lastOpIndex === -1) return;
 		const op = this.operations[this.lastOpIndex];
 		this.lastOpIndex--;
@@ -32,6 +48,7 @@ export class State {
 		this.appliedOperations.push({ diff: op.undo, op: "undo" });
 	}
 	redo() {
+		this.undoTemporal();
 		if (this.lastOpIndex === this.operations.length - 1) return;
 		const op = this.operations[this.lastOpIndex + 1];
 		this.lastOpIndex++;

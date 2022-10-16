@@ -92,13 +92,15 @@ export class TextContent {
 		});
 		return { lines, fontSize };
 	}
+	cache = 0;
 	textInBox(
 		ctx: CanvasRenderingContext2D,
 		font: FontSettings,
 		text: string[],
 		box: RectangleSprite
 	): { lines: Point[]; fontSize: number } {
-		const [fontSize, totalHeight] = calcFontSize(ctx, text, font, this.box);
+		const [fontSize, totalHeight] = calcFontSize(ctx, text, font, this.box, this.cache);
+		this.cache = fontSize;
 		const x = box.x;
 		const lineWidth = lineWidthByFontSize(fontSize);
 		let prevY = box.top + lineWidth;
@@ -183,7 +185,8 @@ function calcFontSize(
 	ctx: CanvasRenderingContext2D,
 	lines: string[],
 	font: FontSettings,
-	box: RectangleSprite
+	box: RectangleSprite,
+	cached = 0
 ): [number, number] {
 	let maxLine = lines[0];
 	let maxWidth = 0;
@@ -196,7 +199,7 @@ function calcFontSize(
 	});
 	const memeWidth = box.width;
 	const memeHeight = box.height;
-	let fontSize = memeHeight / lines.length;
+	let fontSize = cached || memeHeight / lines.length;
 	let totalHeight = 0;
 	// TODO: optimization
 	for (let i = 0; i < 500; i++) {
