@@ -13,6 +13,9 @@ export class BrushManager {
 			case "pattern":
 				ctx[path] = this.pattern(brush.name, brush.patternSettings, metrics);
 				break;
+			case "none":
+				ctx[path] = "#00000000";
+				break;
 			default:
 				throw new Error(`Unknown brush type: ${brush.type} with name ${brush.name}`);
 		}
@@ -47,8 +50,10 @@ export class BrushManager {
 	}
 }
 
+export type BrushType = BrushPath["type"];
+
 export interface BrushPath {
-	type: "color" | "pattern";
+	type: "color" | "pattern" | "none";
 	name: string;
 	patternSettings: {
 		scale: "font" | { x: number; y: number };

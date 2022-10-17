@@ -7,11 +7,11 @@ import { ColorInput } from "./color_input";
 import { NumberInput } from "./number_input";
 import { PatchData, BatchPatchData, ChangedData, DelegatePatch } from "../../patch";
 import { ObjectInputComponent } from "./input_component";
-import { BrushPath } from "../../brush";
+import { BrushPath, BrushType } from "../../brush";
 
 export class BrushInput implements ObjectInputComponent<BrushPath> {
 	inputs = {
-		type: new Selector(["color", "pattern"]),
+		type: new Selector(["color", "pattern", "none"]),
 		pattern: new Selector(this.patterns),
 		color: new ColorInput(HTML.SetStyles(s => (s.width = "100%"))),
 		patternSettings: {
@@ -53,15 +53,10 @@ export class BrushInput implements ObjectInputComponent<BrushPath> {
 	colorSettingsContainer: HTMLElement = HTML.CreateElement("section", HTML.Append(this.inputs.color));
 	element: HTMLElement;
 
-	set activeType(value: "color" | "pattern") {
+	set activeType(value: BrushType) {
 		this.inputs.type.update(value);
-		if (value === "color") {
-			this.colorSettingsContainer.hidden = false;
-			this.patternSettingsContainer.hidden = true;
-			return;
-		}
-		this.colorSettingsContainer.hidden = true;
-		this.patternSettingsContainer.hidden = false;
+		this.colorSettingsContainer.hidden = value !== "color";
+		this.patternSettingsContainer.hidden = value !== "pattern";
 	}
 	update(newState: BrushPath) {
 		this.activeType = newState.type;
