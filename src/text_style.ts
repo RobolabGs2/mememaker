@@ -1,4 +1,5 @@
 import { BrushPath } from "./brush";
+import Point from "./geometry/point";
 
 export type RecursivePartial<T> = {
 	[P in keyof T]?: T[P] extends (infer U)[]
@@ -27,77 +28,41 @@ export interface TextStylePrototype {
 	case: CaseType;
 	fill: BrushPath;
 	stroke: BrushPath;
+	shadow: ShadowSettings;
 }
 
-export class TextStyle implements TextStylePrototype {
-	private _case?: CaseType;
-	private _font: RecursivePartial<FontSettings> = {};
-	private _fill: RecursivePartial<BrushPath> = {};
-	private _stroke: RecursivePartial<BrushPath> = {};
-	private _fontProxy = WrapPrototype(this.parent.font, this._font);
-	private _fillProxy = WrapPrototype(this.parent.fill, this._fill);
-	private _strokeProxy = WrapPrototype(this.parent.stroke, this._stroke);
+export interface ShadowSettings {
+	enabled?: boolean;
+	blur: number; // 0 <= blur
+	color: string;
+	offset: Point;
+}
 
-	constructor(public name: string, private _parent: TextStyle) {}
+export function setupShadow(ctx: CanvasRenderingContext2D, settings: ShadowSettings) {
+	const { enabled, blur, color, offset } = settings;
+	ctx.shadowBlur = enabled ? blur : 0;
+	ctx.shadowColor = enabled ? color : "#00000000";
+	if (enabled) {
+		ctx.shadowOffsetX = offset.x;
+		ctx.shadowOffsetY = offset.y;
+	}
+}
 
-	public get parent(): TextStyle {
-		return this._parent;
-	}
-	public set parent(p: TextStyle) {
-		this._parent = p;
-		this._fontProxy.parent = p.font;
-		this._fillProxy.parent = p.fill;
-		this._strokeProxy.parent = p.stroke;
-	}
-	public get font(): FontSettings {
-		return this._fontProxy.proxy;
-	}
-	public set font(value: FontSettings) {
-		this._font = this._fontProxy.overrides = value;
-	}
-	public get fill(): BrushPath {
-		return this._fillProxy.proxy;
-	}
-	public set fill(value: BrushPath) {
-		this._fill = this._fillProxy.overrides = value;
-	}
-	public get stroke(): BrushPath {
-		return this._strokeProxy.proxy;
-	}
-	public set stroke(value: BrushPath) {
-		this._stroke = this._strokeProxy.overrides = value;
-	}
-	public get case(): CaseType {
-		return this._case ? this._case : this.parent.case;
-	}
-	public set case(v: CaseType) {
-		if (this.parent.case === v) {
-			this._case = undefined;
+function isObject(a: unknown): a is object {
+	return a !== null && typeof a === "object";
+}
+
+export function mergePartials<T extends object>(defaults: T, overrides: RecursivePartial<T>): T {
+	for (const x in defaults) {
+		const actual = overrides[x];
+		const defaultValue = defaults[x];
+		if (isObject(defaultValue)) {
+			overrides[x] = mergePartials(defaultValue, actual || {}) as any;
+		} else if (actual === undefined) {
+			overrides[x] = defaultValue as any;
 		}
-		this._case = v;
 	}
-}
-
-function WrapPrototype<T extends object>(
-	parent: T,
-	overrides: RecursivePartial<T>
-): { proxy: T; parent: T; overrides: RecursivePartial<T> } {
-	const res = { parent, proxy: parent, overrides };
-	res.proxy = new Proxy<T>(parent, {
-		get(target, p) {
-			if (Reflect.has(res.overrides, p)) {
-				return Reflect.get(res.overrides, p);
-			}
-			return Reflect.get(res.parent, p);
-		},
-		set(target, p, value) {
-			if (Reflect.has(res.parent, p)) {
-				return Reflect.set(res.overrides, p, value);
-			}
-			throw new Error(`field ${p.toString()} cannot be set`);
-		},
-	});
-	return res;
+	return overrides as T;
 }
 
 export interface FontSettings {
@@ -146,6 +111,12 @@ export function DefaultStyle(): TextStylePrototype {
 			family: "Impact",
 			italic: false,
 			smallCaps: false,
+		},
+		shadow: {
+			enabled: false,
+			color: "#000000",
+			blur: 10,
+			offset: { x: 0, y: 0 },
 		},
 	};
 }

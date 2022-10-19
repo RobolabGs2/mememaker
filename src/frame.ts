@@ -11,6 +11,9 @@ import {
 	lineWidthByFontSize,
 	fontSettingsToCSS,
 	DefaultStyle,
+	setupShadow,
+	RecursivePartial,
+	mergePartials,
 } from "./text_style";
 
 // class MemeProject {
@@ -39,16 +42,21 @@ export function resizeCanvas(canvas: HTMLCanvasElement, size: { width: number; h
 }
 
 export class TextContent {
+	private static defaultStyle = DefaultStyle();
+	public style: TextStylePrototype;
 	constructor(
 		public box: RectangleSprite,
 		public text: string,
-		public style: TextStylePrototype,
+		style: RecursivePartial<TextStylePrototype>,
 		public main = false
-	) {}
+	) {
+		this.style = mergePartials(TextContent.defaultStyle, style);
+	}
 	draw(ctx: CanvasRenderingContext2D, brushManager: BrushManager): void {
 		const text = textToCase(this.text, this.style.case).split("\n");
 		const { lines, fontSize } = this.getTextCoords(ctx, text);
 		brushManager.setupCtxForText(ctx, this.style, fontSize);
+		setupShadow(ctx, this.style.shadow);
 		if (!this.main) {
 			ctx.translate(this.box.x, this.box.y);
 			ctx.rotate(this.box.transform.rotate);

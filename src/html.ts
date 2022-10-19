@@ -43,7 +43,7 @@ export function AppendTo(parent: HTMLElement) {
 	return (elem: HTMLElement) => parent.append(elem);
 }
 
-export function SetNumberInputRange(min: number | undefined, max: number | undefined, step: number | undefined) {
+export function SetNumberInputRange(min?: number, max?: number, step?: number) {
 	return (input: HTMLInputElement) => {
 		input.min = min === undefined ? "any" : min.toString();
 		input.max = max === undefined ? "any" : max.toString();

@@ -30,6 +30,7 @@ import { BrushManager } from "./brush";
 import { TextStylePrototype, DefaultStyle } from "./text_style";
 import { RectangleSprite } from "./graphics/sprite";
 import BoxEditor from "./box_editor";
+import { ShadowInput } from "./ui/inputs/shadow_input";
 
 export class DrawContext {
 	constructor(
@@ -143,6 +144,7 @@ export class App {
 			patternsKeys,
 			"#000000"
 		);
+		const shadowInput = new ShadowInput(newValue => applyPatch(new DelegatePatch(["shadow"], newValue)));
 		const textInput = new TextInput(newValue =>
 			this.state.apply(new ChangedData<State, ["activeText", ["text"]]>(["activeText", ["text"]], newValue))
 		);
@@ -150,6 +152,7 @@ export class App {
 			textSettingsInput.update(app.state.activeText.style);
 			fillBrushInput.update(app.state.activeText.style.fill);
 			strokeBrushInput.update(app.state.activeText.style.stroke);
+			shadowInput.update(app.state.activeText.style.shadow);
 			textInput.update(app.state.activeText.text);
 		});
 		properties.append(
@@ -159,6 +162,7 @@ export class App {
 			fillBrushInput.element,
 			"Stroke: ",
 			strokeBrushInput.element,
+			shadowInput.element,
 			"Text:",
 			textSettingsInput.element,
 			textInput.element
