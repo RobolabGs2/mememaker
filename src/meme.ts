@@ -3,6 +3,7 @@ import { BrushManager } from "./brush";
 import { Frame, TextContent } from "./frame";
 import { RectangleSprite } from "./graphics/sprite";
 import { downloadImage } from "./http_helpers";
+import { mergePartials } from "./text_style";
 
 export class Meme {
 	static fromFile(file: Blob): Promise<Frame[]> {
@@ -66,7 +67,7 @@ export class Meme {
 						} else {
 							frames[j] = new Frame(img, typeof frameJSON === "string" ? frameJSON : frameJSON.text);
 							if (typeof frameJSON !== "string") {
-								frames[j].textContent[0].style = frameJSON.textContent.style;
+								frames[j].textContent[0].style = mergePartials(TextContent.defaultStyle, frameJSON.textContent.style);
 							}
 						}
 					});

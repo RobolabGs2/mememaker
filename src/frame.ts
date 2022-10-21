@@ -1,9 +1,5 @@
-// interface Brush {
-//		(ctx: CanvasRenderingContext2D, text?: string): void;
-// }
-
 import { BrushManager } from "./brush";
-import { RectangleSprite, Transform } from "./graphics/sprite";
+import { RectangleSprite } from "./graphics/sprite";
 import {
 	TextStylePrototype,
 	textToCase,
@@ -15,11 +11,11 @@ import {
 	RecursivePartial,
 	mergePartials,
 } from "./text_style";
+import { loadSettingsFromURL } from "./url_parser";
 
-// class MemeProject {
-// frames: Frame[];
-// brushes: Record<string, Record<string, Brush<unknown>>>;
-// }
+const globalSettings = loadSettingsFromURL({
+	drawDebug: false,
+});
 
 export type RectangleSide = Record<"right" | "left" | "top" | "bottom" | "center" | "none", boolean>;
 
@@ -31,10 +27,6 @@ interface Point {
 	x: number;
 	y: number;
 }
-interface PositionStrategy {
-	text(ctx: CanvasRenderingContext2D, text: string): { lines: Point[]; fontSize: number };
-	debugDraw(ctx: CanvasRenderingContext2D): void;
-}
 
 export function resizeCanvas(canvas: HTMLCanvasElement, size: { width: number; height: number }) {
 	if (canvas.width !== size.width) canvas.width = size.width;
@@ -42,7 +34,7 @@ export function resizeCanvas(canvas: HTMLCanvasElement, size: { width: number; h
 }
 
 export class TextContent {
-	private static defaultStyle = DefaultStyle();
+	public static defaultStyle = DefaultStyle();
 	public style: TextStylePrototype;
 	constructor(
 		public box: RectangleSprite,
@@ -53,6 +45,7 @@ export class TextContent {
 		this.style = mergePartials(TextContent.defaultStyle, style);
 	}
 	draw(ctx: CanvasRenderingContext2D, brushManager: BrushManager): void {
+		ctx.textAlign = "center";
 		const text = textToCase(this.text, this.style.case).split("\n");
 		const { lines, fontSize } = this.getTextCoords(ctx, text);
 		brushManager.setupCtxForText(ctx, this.style, fontSize);
@@ -66,16 +59,10 @@ export class TextContent {
 			const { x, y } = lines[i];
 			ctx.strokeText(line, x, y);
 			ctx.fillText(line, x, y);
-			/*
-			const params = ctx.measureText(line);
-			ctx.strokeStyle = "#FF0000";
-			ctx.strokeRect(
-				x - params.actualBoundingBoxLeft,
-				y - params.actualBoundingBoxAscent,
-				params.actualBoundingBoxLeft + params.actualBoundingBoxRight,
-				params.actualBoundingBoxAscent + params.actualBoundingBoxDescent
-			);
-			*/
+			if (globalSettings.drawDebug) {
+				drawBoundsOfText(ctx, x, y, line, fontSize);
+				brushManager.setupCtxForText(ctx, this.style, fontSize);
+			}
 		});
 	}
 	mainText(ctx: CanvasRenderingContext2D, font: FontSettings, text: string[]): { lines: Point[]; fontSize: number } {
@@ -100,18 +87,16 @@ export class TextContent {
 		});
 		return { lines, fontSize };
 	}
-	cache = 0;
 	textInBox(
 		ctx: CanvasRenderingContext2D,
 		font: FontSettings,
 		text: string[],
 		box: RectangleSprite
 	): { lines: Point[]; fontSize: number } {
-		const [fontSize, totalHeight] = calcFontSize(ctx, text, font, this.box, this.cache);
-		this.cache = fontSize;
-		const x = box.x;
+		const [fontSize, totalHeight] = calcFontSize(ctx, text, font, this.box);
 		const lineWidth = lineWidthByFontSize(fontSize);
-		let prevY = box.top + lineWidth;
+		const x = box.x - lineWidth / 2;
+		let prevY = box.top + lineWidth / 2;
 		if (totalHeight < box.height) {
 			prevY += (box.height - totalHeight) / 2;
 		}
@@ -119,7 +104,9 @@ export class TextContent {
 			const params = ctx.measureText(t);
 			const y = prevY + params.actualBoundingBoxAscent;
 			prevY = y + params.actualBoundingBoxDescent + lineWidth;
-			return { x, y };
+			const textWidth = params.actualBoundingBoxLeft + params.actualBoundingBoxRight;
+			const shiftX = textWidth / 2 - params.actualBoundingBoxLeft - lineWidth / 2;
+			return { x: x - shiftX, y };
 		});
 		return { lines, fontSize };
 	}
@@ -193,44 +180,70 @@ function calcFontSize(
 	ctx: CanvasRenderingContext2D,
 	lines: string[],
 	font: FontSettings,
-	box: RectangleSprite,
-	cached = 0
+	box: RectangleSprite
 ): [number, number] {
 	let maxLine = lines[0];
 	let maxWidth = 0;
 	lines.forEach(line => {
-		const width = ctx.measureText(line).width;
+		const params = ctx.measureText(line);
+		const width = params.actualBoundingBoxLeft + params.actualBoundingBoxRight;
 		if (width > maxWidth) {
 			maxLine = line;
 			maxWidth = width;
 		}
 	});
-	const memeWidth = box.width;
-	const memeHeight = box.height;
-	let fontSize = cached || memeHeight / lines.length;
-	let totalHeight = 0;
-	// TODO: optimization
-	for (let i = 0; i < 500; i++) {
-		ctx.font = fontSettingsToCSS(font, fontSize);
+	const memeWidth = Math.abs(box.width);
+	const memeHeight = Math.abs(box.height);
+	if (memeHeight < 2 || memeWidth < 2) return [0, memeHeight];
+	let left = 1;
+	let right = memeHeight;
+	for (;;) {
+		const middle = (left + right) / 2;
+		ctx.font = fontSettingsToCSS(font, middle);
 		const params = ctx.measureText(maxLine);
-		const textWidth = params.width;
+		const lineWidth = lineWidthByFontSize(middle);
+		const textWidth = params.actualBoundingBoxLeft + params.actualBoundingBoxRight + lineWidth;
 		const textHeight = lines.reduce((sum, l) => {
 			const params = ctx.measureText(l);
-			return sum + (params.actualBoundingBoxAscent + params.actualBoundingBoxDescent) + lineWidthByFontSize(fontSize);
+			return sum + (params.actualBoundingBoxAscent + params.actualBoundingBoxDescent) + lineWidth;
 		}, 0);
-		totalHeight = textHeight;
 		const percentW = textWidth / memeWidth;
 		const percentH = textHeight / memeHeight;
-		// console.log(memeWidth, textWidth, percent, fontSize);
+		if (Math.abs(left - right) < 1) {
+			return [middle, textHeight];
+		}
 		if (percentW > 1 || percentH > 1) {
-			fontSize -= 1;
-			continue;
-		}
-		if (percentW < 0.98 && percentH < 0.98) {
-			fontSize += 1;
-			continue;
-		}
-		break;
+			right = middle;
+		} else left = middle;
 	}
-	return [fontSize, totalHeight];
+}
+
+function drawBoundsOfText(ctx: CanvasRenderingContext2D, x: number, y: number, line: string, fontSize: number) {
+	const params = ctx.measureText(line);
+	ctx.strokeStyle = "#FF0000";
+	ctx.lineWidth = 1;
+	ctx.strokeRect(
+		x - params.actualBoundingBoxLeft,
+		y - params.actualBoundingBoxAscent,
+		params.actualBoundingBoxLeft + params.actualBoundingBoxRight,
+		params.actualBoundingBoxAscent + params.actualBoundingBoxDescent
+	);
+	ctx.strokeStyle = "#00FF00";
+	ctx.beginPath();
+	ctx.moveTo(x - params.actualBoundingBoxLeft, y);
+	ctx.lineTo(x + params.actualBoundingBoxRight, y);
+	ctx.stroke();
+	ctx.beginPath();
+	ctx.moveTo(x, y - params.actualBoundingBoxAscent);
+	ctx.lineTo(x, y + params.actualBoundingBoxDescent);
+	ctx.stroke();
+	ctx.strokeStyle = "#FF00FF";
+	ctx.lineWidth = 1;
+	const w = lineWidthByFontSize(fontSize);
+	ctx.strokeRect(
+		x - params.actualBoundingBoxLeft - w / 2,
+		y - params.actualBoundingBoxAscent - w / 2,
+		params.actualBoundingBoxLeft + params.actualBoundingBoxRight + w,
+		params.actualBoundingBoxAscent + params.actualBoundingBoxDescent + w
+	);
 }

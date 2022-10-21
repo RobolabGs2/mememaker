@@ -23,3 +23,6 @@ export function vector(from: Point, to: Point): Point {
 export function scalar(v1: Point, v2: Point): number {
 	return v1.x * v2.x + v1.y * v2.y;
 }
+export function equals(p1: Point, p2: Point, precision = 0) {
+	return Math.abs(p1.x - p2.x) <= precision && Math.abs(p1.y - p2.y) <= precision;
+}

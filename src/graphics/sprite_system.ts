@@ -1,5 +1,6 @@
 import Point from "../geometry/point";
 import { CanvasCursor } from "../ui/cursor";
+import * as PointUtils from "../geometry/point_utils";
 
 export interface Sprite {
 	contains(cursor: Point): boolean;
@@ -31,6 +32,7 @@ export class SpriteSystem {
 				this.dragAndDrop = {
 					sprite: this.hoveredSprite,
 					system,
+					lastPosition: { x: NaN, y: NaN },
 				};
 			},
 			(from, to) => {
@@ -43,6 +45,7 @@ export class SpriteSystem {
 	dragAndDrop?: {
 		sprite: Sprite;
 		system: DragDropSystem;
+		lastPosition: Point;
 	};
 	hoveredSprite?: Sprite;
 	add<T extends Sprite>(s: T) {
@@ -57,7 +60,11 @@ export class SpriteSystem {
 	}
 	update() {
 		if (this.dragAndDrop) {
-			this.dragAndDrop.system?.move(this.cursor.moveStart!, this.cursor.position, this.cursor);
+			if (!PointUtils.equals(this.cursor.position, this.dragAndDrop.lastPosition, 0.001)) {
+				this.dragAndDrop.system.move(this.cursor.moveStart!, this.cursor.position, this.cursor);
+				this.dragAndDrop.lastPosition.x = this.cursor.position.x;
+				this.dragAndDrop.lastPosition.y = this.cursor.position.y;
+			}
 			return;
 		}
 		if (this.hoveredSprite?.contains(this.cursor.position)) return;

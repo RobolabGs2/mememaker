@@ -81,7 +81,7 @@ export class App {
 	uiDraw() {
 		for (let i = 0; i < this.state.appliedOperations.length; i++) {
 			const { diff: patch, op } = this.state.appliedOperations[i];
-			this.drawPatchHandler(patch, op !== "do");
+			this.drawPatchHandler(patch, !(op === "do" || op === "temporal"));
 		}
 		this.state.appliedOperations.length = 0;
 		this.boxEditor.draw();
