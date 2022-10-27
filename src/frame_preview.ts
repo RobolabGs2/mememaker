@@ -2,6 +2,7 @@ import * as HTML from "./html";
 import { Frame } from "./frame";
 import { SetActiveFrame, RemoveFrame, ShiftFrame, StateDiff } from "./state";
 import { BrushManager } from "./brush";
+import Icons from "./ui/icons";
 
 export class FramePreview {
 	private preview: CanvasRenderingContext2D;
@@ -12,10 +13,11 @@ export class FramePreview {
 			"canvas",
 			HTML.AddEventListener("click", onChange.bind(undefined, new SetActiveFrame(frame)))
 		);
-		function makeButton(name: string, action: StateDiff) {
+		function makeButton(name: string, svg: string, action: StateDiff) {
 			return HTML.CreateElement(
 				"button",
-				HTML.SetText(name),
+				HTML.SetTitle(name),
+				el => (el.innerHTML = svg),
 				HTML.AddEventListener("click", onChange.bind(undefined, action))
 			);
 		}
@@ -29,9 +31,9 @@ export class FramePreview {
 				HTML.CreateElement(
 					"footer",
 					HTML.Append(
-						makeButton("Remove", new RemoveFrame(frame)),
-						makeButton("Up", new ShiftFrame(frame, -1)),
-						makeButton("Down", new ShiftFrame(frame, +1))
+						makeButton("Remove", Icons.Trash, new RemoveFrame(frame)),
+						makeButton("Up", Icons.ArrowUp, new ShiftFrame(frame, -1)),
+						makeButton("Down", Icons.ArrowDown, new ShiftFrame(frame, +1))
 					)
 				)
 			)

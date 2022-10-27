@@ -7,10 +7,14 @@ import { NumberInput } from "./number_input";
 import { PatchData, BatchPatchData, ChangedData, DelegatePatch } from "../../patch";
 import { ObjectInputComponent } from "./input_component";
 import { ShadowSettings } from "../../text_style";
+import { Selector } from "./selector";
 
 export class ShadowInput implements ObjectInputComponent<ShadowSettings> {
 	inputs = {
-		enabled: new SwitchButton(HTML.SetText("Shadow", "Shadow")),
+		enabled: new Selector({
+			Включить: "true",
+			Выключить: "false",
+		}),
 		blur: new NumberInput(HTML.SetNumberInputRange(0)),
 		color: new ColorInput(HTML.SetStyles(s => (s.width = "100%"))),
 		offset: new PointInput({ x: 0, y: 0 }),
@@ -21,24 +25,24 @@ export class ShadowInput implements ObjectInputComponent<ShadowSettings> {
 			HTML.CreateElement(
 				"section",
 				HTML.AddClass(styles["text-settings__panel"]),
-				HTML.Append(HTML.CreateElement("span", HTML.SetText("Color: ")), this.inputs.color)
+				HTML.Append(HTML.CreateElement("span", HTML.SetText("Цвет: ")), this.inputs.color)
 			),
 			HTML.CreateElement(
 				"section",
 				HTML.AddClass(styles["text-settings__panel"]),
-				HTML.Append(HTML.CreateElement("span", HTML.SetText("Offset: ")), this.inputs.offset)
+				HTML.Append(HTML.CreateElement("span", HTML.SetText("Сдвиг: ")), this.inputs.offset)
 			),
 			HTML.CreateElement(
 				"section",
 				HTML.AddClass(styles["text-settings__panel"]),
-				HTML.Append(HTML.CreateElement("span", HTML.SetText("Blur: ")), this.inputs.blur)
+				HTML.Append(HTML.CreateElement("span", HTML.SetText("Размытие: ")), this.inputs.blur)
 			)
 		)
 	);
 	element: HTMLElement;
 
 	update(newState: ShadowSettings) {
-		this.inputs.enabled.update(newState.enabled == true);
+		this.inputs.enabled.update(newState.enabled ? "true" : "false");
 		this.settingsContainer.hidden = !newState.enabled;
 		this.inputs.blur.update(newState.blur);
 		this.inputs.color.update(newState.color);
@@ -51,7 +55,8 @@ export class ShadowInput implements ObjectInputComponent<ShadowSettings> {
 			HTML.AddClass(styles["text-settings__stack"]),
 			HTML.Append(this.inputs.enabled, this.settingsContainer)
 		);
-		this.inputs.enabled.onChange = enabled => {
+		this.inputs.enabled.onChange = enabledString => {
+			const enabled = enabledString === "true";
 			this.onChange?.(new BatchPatchData(new ChangedData(["enabled"], enabled)));
 			this.settingsContainer.hidden = !enabled;
 		};

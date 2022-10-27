@@ -31,6 +31,7 @@ import { TextStylePrototype, DefaultStyle } from "./text_style";
 import { RectangleSprite } from "./graphics/sprite";
 import BoxEditor from "./box_editor";
 import { ShadowInput } from "./ui/inputs/shadow_input";
+import styles from "./tabs_container.module.scss";
 
 export class DrawContext {
 	constructor(
@@ -57,6 +58,53 @@ export class DrawContext {
 	public get height(): number {
 		return this.main.canvas.height;
 	}
+}
+
+function TabsContainer(tabs: { label: HTMLElement; content: HTMLElement; title: string }[]) {
+	let activeTab = 0;
+	const contents = tabs.map(tab =>
+		HTML.CreateElement(
+			"section",
+			HTML.Append(tab.content),
+			HTML.SetStyles(s => (s.display = "none"))
+		)
+	);
+	const labels = tabs.map((tab, i) => {
+		return HTML.CreateElement(
+			"section",
+			HTML.AddClass(styles["label"]),
+			HTML.Append(tab.label),
+			HTML.AddEventListener("click", ev => {
+				if (ev.button !== 0) return;
+				ev.preventDefault();
+				setActiveTab(i);
+			})
+		);
+	});
+	function setActiveTab(i: number) {
+		contents[activeTab].style.display = "none";
+		labels[activeTab].classList.toggle(styles["label_active"], false);
+		contents[i].style.display = "";
+		labels[i].classList.toggle(styles["label_active"], true);
+		activeTab = i;
+	}
+	setActiveTab(0);
+	const labelsContainer = HTML.CreateElement(
+		"header",
+		HTML.AddClass(styles["tabs-container__labels"]),
+		HTML.Append(labels)
+	);
+	const content = HTML.CreateElement(
+		"section",
+		HTML.AddClass(styles["tabs-container__content"]),
+		HTML.Append(contents)
+	);
+	const container = HTML.CreateElement(
+		"article",
+		HTML.AddClass(styles["tabs-container"]),
+		HTML.Append(labelsContainer, content)
+	);
+	return container;
 }
 
 export class App {
@@ -118,12 +166,12 @@ export class App {
 		this.contentViews = new PreviewListContainer(content => this.createContentView(content), this.brushManager);
 		const framesContainer = document.querySelector("section#frames") as HTMLElement;
 		framesContainer.append(this.framesViews.element);
-		addButton("Add frame", () => this.addFrame(), framesContainer);
-		const textsContainer = document.querySelector("section#current-frame") as HTMLElement;
+		addButton("Добавить фрейм", () => this.addFrame(), framesContainer);
+		const textsContainer = HTML.CreateElement("section", HTML.SetId("current-frame"), HTML.AddClass("frames"));
 		textsContainer.append(this.contentViews.element);
-		addButton("Add text", () => this.addText(), textsContainer);
+		addButton("Добавить блок с текстом", () => this.addText(), textsContainer);
 
-		const properties = document.querySelector("section#properties") as HTMLElement;
+		const properties = document.querySelector("section#right-panel") as HTMLElement;
 		const urlInput = new FilesInput("image/*", files => {
 			const image = files.find(file => file.type?.match(/^image/));
 			if (image) this.busyView.await("Upload image from file...", this.downloadAndSetImage(image));
@@ -145,8 +193,10 @@ export class App {
 			"#000000"
 		);
 		const shadowInput = new ShadowInput(newValue => applyPatch(new DelegatePatch(["shadow"], newValue)));
-		const textInput = new TextInput(newValue =>
-			this.state.apply(new ChangedData<State, ["activeText", ["text"]]>(["activeText", ["text"]], newValue))
+		const textInput = new TextInput(
+			newValue =>
+				this.state.apply(new ChangedData<State, ["activeText", ["text"]]>(["activeText", ["text"]], newValue)),
+			6
 		);
 		this.onChangeActiveFrame.push(app => {
 			textSettingsInput.update(app.state.activeText.style);
@@ -155,18 +205,36 @@ export class App {
 			shadowInput.update(app.state.activeText.style.shadow);
 			textInput.update(app.state.activeText.text);
 		});
-		properties.append(
-			"Image (or Ctrl+V, or drop file):",
-			urlInput.element,
-			"Fill:",
-			fillBrushInput.element,
-			"Stroke: ",
-			strokeBrushInput.element,
-			shadowInput.element,
-			"Text:",
-			textSettingsInput.element,
-			textInput.element
+		const styleSettingsContainer = TabsContainer([
+			{ title: "Fill", label: HTML.CreateElement("div", HTML.SetText("Заливка")), content: fillBrushInput.element },
+			{ title: "Stroke", label: HTML.CreateElement("div", HTML.SetText("Обводка")), content: strokeBrushInput.element },
+			{ title: "Shadow", label: HTML.CreateElement("div", HTML.SetText("Тень")), content: shadowInput.element },
+		]);
+		const blockPropertiesContainer = HTML.ModifyElement(
+			TabsContainer([
+				{
+					title: "Настройки текста",
+					label: HTML.CreateElement("span", HTML.SetText("Текст")),
+					content: HTML.CreateElement(
+						"article",
+						HTML.Append(textSettingsInput.element, textInput.element, styleSettingsContainer)
+					),
+				},
+				{
+					title: "Настройки фона",
+					label: HTML.CreateElement("span", HTML.SetText("Фон")),
+					content: HTML.CreateElement(
+						"article",
+						HTML.Append(
+							HTML.CreateElement("span", HTML.SetText("Фоновое изображение (также работают Ctrl+V, или drop):")),
+							urlInput.element
+						)
+					),
+				},
+			]),
+			HTML.SetId("properties")
 		);
+		properties.append(textsContainer, blockPropertiesContainer);
 		document.addEventListener("paste", event => {
 			const items = event.clipboardData?.items;
 			if (!items) return;
@@ -210,36 +278,57 @@ export class App {
 				.then(patch => this.state.apply(patch));
 			this.busyView.await("Creating new frames...", frames);
 		});
-		addButton(
-			"Download rendered meme",
-			() =>
-				this.busyView.await(
-					"Rendering...",
-					Meme.renderToZIP(this.state.frames, this.brushManager).then(downloadBlobAs("meme.zip"))
-				),
-			properties
-		);
-		addButton(
-			"Download csv script",
-			() =>
-				this.busyView.await("Preparing script...", Meme.scriptCSV(this.state.frames).then(downloadBlobAs("meme.csv"))),
-			properties
-		);
-		addButton(
-			"Download meme project",
-			() => this.busyView.await("Packing project...", Meme.toFile(this.state.frames).then(downloadBlobAs("meme.meme"))),
-			properties
-		);
-
-		const memeInput = new FilesInput(".meme", files => {
-			const file = files[0];
-			this.busyView.await(
-				"Open project...",
-				Meme.fromFile(file).then(frames => this.state.apply(new SetFrames(frames)))
+		{
+			const projectActionsContainer = HTML.CreateElement(
+				"section",
+				HTML.AppendTo(framesContainer.parentElement!),
+				HTML.SetStyles(styles => {
+					styles.display = "flex";
+					styles.flexDirection = "column";
+					styles.backgroundColor = "#34352F";
+					styles.color = "#EEEEEE";
+				})
 			);
-		});
-		properties.append("Open meme project:", memeInput.element);
+			addButton(
+				"Сохранить отрендеренный мем",
+				() =>
+					this.busyView.await(
+						"Rendering...",
+						Meme.renderToZIP(this.state.frames, this.brushManager).then(downloadBlobAs("meme.zip"))
+					),
+				projectActionsContainer
+			);
+			addButton(
+				"Сохранить текст в csv",
+				() =>
+					this.busyView.await(
+						"Preparing script...",
+						Meme.scriptCSV(this.state.frames).then(downloadBlobAs("meme.csv"))
+					),
+				projectActionsContainer
+			);
+			addButton(
+				"Сохранить meme project",
+				() =>
+					this.busyView.await("Packing project...", Meme.toFile(this.state.frames).then(downloadBlobAs("meme.meme"))),
+				projectActionsContainer
+			);
 
+			const memeInput = new FilesInput(".meme", files => {
+				const file = files[0];
+				this.busyView.await(
+					"Open project...",
+					Meme.fromFile(file).then(frames => this.state.apply(new SetFrames(frames)))
+				);
+			});
+			HTML.ModifyChildren(
+				HTML.SetStyles(s => {
+					s.margin = "4px";
+					s.padding = "4px";
+				})
+			)(projectActionsContainer);
+			projectActionsContainer.append("Открыть meme project:", memeInput.element);
+		}
 		document.addEventListener("keydown", ev => {
 			if (ev.ctrlKey && ev.code === "KeyZ") {
 				ev.preventDefault();

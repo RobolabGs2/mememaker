@@ -1,0 +1,29 @@
+.tabs-container {
+	background-color: #1e1f1c;
+	&__labels {
+		display: flex;
+	}
+	&__content {
+		background-color: #272822;
+	}
+}
+
+.label {
+	background-color: gray;
+	flex: 1;
+	display: flex;
+	justify-content: center;
+	border: solid 1px #000;
+	border-radius: 4px 4px 0px 0px;
+	&:hover {
+		cursor: pointer;
+		background-color: #444444;
+	}
+	&_active {
+		background-color: #333333;
+		border: solid 1px #aaeeee;
+		&:hover {
+			background-color: #333333;
+		}
+	}
+}

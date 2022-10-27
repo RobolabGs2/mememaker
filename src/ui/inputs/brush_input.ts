@@ -11,11 +11,15 @@ import { BrushPath, BrushType } from "../../brush";
 
 export class BrushInput implements ObjectInputComponent<BrushPath> {
 	inputs = {
-		type: new Selector(["color", "pattern", "none"]),
+		type: new Selector({
+			Цвет: "color",
+			Паттерн: "pattern",
+			Выключить: "none",
+		}),
 		pattern: new Selector(this.patterns),
 		color: new ColorInput(HTML.SetStyles(s => (s.width = "100%"))),
 		patternSettings: {
-			scaleByFont: new SwitchButton(HTML.SetText("By font", "Auto scale by font size")),
+			scaleByFont: new SwitchButton(HTML.SetText("Авто", "Масштабирование по размеру текста")),
 			scale: new PointInput({ x: 1, y: 1 }),
 			rotate: new NumberInput(HTML.SetNumberInputRange(0, 360, 0.5)),
 			shift: new PointInput(),
@@ -27,23 +31,26 @@ export class BrushInput implements ObjectInputComponent<BrushPath> {
 			HTML.CreateElement(
 				"section",
 				HTML.AddClass(styles["text-settings__panel"]),
-				HTML.Append(HTML.CreateElement("span", HTML.SetText("Pattern: ")), this.inputs.pattern)
-			),
-			HTML.CreateElement(
-				"section",
-				HTML.AddClass(styles["text-settings__panel"]),
-				HTML.Append(HTML.CreateElement("span", HTML.SetText("Rotate (degrees): ")), this.inputs.patternSettings.rotate)
-			),
-			HTML.CreateElement(
-				"section",
-				HTML.AddClass(styles["text-settings__panel"]),
-				HTML.Append(HTML.CreateElement("span", HTML.SetText("Shift: ")), this.inputs.patternSettings.shift)
+				HTML.Append(HTML.CreateElement("span", HTML.SetText("Паттерн: ")), this.inputs.pattern)
 			),
 			HTML.CreateElement(
 				"section",
 				HTML.AddClass(styles["text-settings__panel"]),
 				HTML.Append(
-					HTML.CreateElement("span", HTML.SetText("Scale: ")),
+					HTML.CreateElement("span", HTML.SetText("Поворот (в градусах): ")),
+					this.inputs.patternSettings.rotate
+				)
+			),
+			HTML.CreateElement(
+				"section",
+				HTML.AddClass(styles["text-settings__panel"]),
+				HTML.Append(HTML.CreateElement("span", HTML.SetText("Сдвиг: ")), this.inputs.patternSettings.shift)
+			),
+			HTML.CreateElement(
+				"section",
+				HTML.AddClass(styles["text-settings__panel"]),
+				HTML.Append(
+					HTML.CreateElement("span", HTML.SetText("Масштаб: ")),
 					this.inputs.patternSettings.scaleByFont,
 					this.inputs.patternSettings.scale
 				)

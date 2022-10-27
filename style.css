@@ -13,15 +13,32 @@ body > article {
 	display: flex;
 	height: 100%;
 }
-#properties {
+#right-panel {
 	flex: 2;
 	border-left: white 1px solid;
 	color: whitesmoke;
 	display: flex;
 	flex-direction: column;
+	min-width: 256px;
+	height: 100%;
+}
+
+#right-panel > * {
+	flex: 1;
+	max-height: 33%;
+}
+
+#properties {
+	max-height: 100%;
+	height: 100%;
+	padding-top: 8px;
+	flex: 2;
+	display: flex;
+	flex-direction: column;
 	align-items: center;
 	justify-content: flex-start;
 }
+
 #properties > * {
 	width: 100%;
 	box-sizing: border-box;

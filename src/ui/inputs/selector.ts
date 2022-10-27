@@ -2,9 +2,11 @@ import * as HTML from "../../html";
 import { InputComponent } from "./input_component";
 
 export class Selector<T extends string> implements InputComponent<T, HTMLSelectElement> {
-	constructor(readonly states: T[], ...modify: ((t: HTMLSelectElement) => void)[]) {
+	readonly states: T[];
+	constructor(states: Record<string, T> | T[], ...modify: ((t: HTMLSelectElement) => void)[]) {
+		this.states = Object.values(states);
 		this.element = HTML.CreateSelector(
-			states[0],
+			this.states[0],
 			states,
 			newValue => {
 				this.onChange?.(newValue);

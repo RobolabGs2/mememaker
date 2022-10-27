@@ -2,6 +2,7 @@ import * as HTML from "./html";
 import { TextContent } from "./frame";
 import { StateDiff, SetActiveText, RemoveContent, ShiftContent } from "./state";
 import { BrushManager } from "./brush";
+import Icons from "./ui/icons";
 
 export class ContentPreview {
 	private preview: HTMLDivElement;
@@ -11,10 +12,11 @@ export class ContentPreview {
 			"div",
 			HTML.AddEventListener("click", onChange.bind(undefined, new SetActiveText(content)))
 		);
-		function makeButton(name: string, action: StateDiff) {
+		function makeButton(name: string, svg: string, action: StateDiff) {
 			return HTML.CreateElement(
 				"button",
-				HTML.SetText(name),
+				HTML.SetTitle(name),
+				el => (el.innerHTML = svg),
 				HTML.AddEventListener("click", onChange.bind(undefined, action))
 			);
 		}
@@ -26,9 +28,9 @@ export class ContentPreview {
 				HTML.CreateElement(
 					"footer",
 					HTML.Append(
-						...(content.main ? [] : [makeButton("Remove", new RemoveContent(content))]),
-						makeButton("Up", new ShiftContent(content, +1)),
-						makeButton("Down", new ShiftContent(content, -1))
+						...(content.main ? [] : [makeButton("Remove", Icons.Trash, new RemoveContent(content))]),
+						makeButton("Up", Icons.ArrowUp, new ShiftContent(content, +1)),
+						makeButton("Down", Icons.ArrowDown, new ShiftContent(content, -1))
 					)
 				)
 			)
@@ -39,6 +41,7 @@ export class ContentPreview {
 	}
 	updatePreview(brushManager: BrushManager) {
 		this.preview.textContent = this.content.text;
+		this.preview.style.fontFamily = this.content.style.font.family;
 	}
 	updateIndex(index: number) {
 		this.element.style.order = index.toString();
