@@ -16,6 +16,7 @@ import { loadSettingsFromURL } from "./url_parser";
 const globalSettings = loadSettingsFromURL({
 	drawDebug: false,
 });
+const HIGH_TEXT_EXAMPLE = "ЁЙДQ";
 
 export type RectangleSide = Record<"right" | "left" | "top" | "bottom" | "center" | "none", boolean>;
 
@@ -100,10 +101,11 @@ export class TextContent {
 		if (totalHeight < box.height) {
 			prevY += (box.height - totalHeight) / 2;
 		}
+		const exampleParams = ctx.measureText(HIGH_TEXT_EXAMPLE);
 		const lines = text.map(t => {
 			const params = ctx.measureText(t);
-			const y = prevY + params.actualBoundingBoxAscent;
-			prevY = y + params.actualBoundingBoxDescent + lineWidth;
+			const y = prevY + exampleParams.actualBoundingBoxAscent;
+			prevY = y + exampleParams.actualBoundingBoxDescent + lineWidth;
 			const textWidth = params.actualBoundingBoxLeft + params.actualBoundingBoxRight;
 			const shiftX = textWidth / 2 - params.actualBoundingBoxLeft - lineWidth / 2;
 			return { x: x - shiftX, y };
@@ -201,12 +203,15 @@ function calcFontSize(
 		const middle = (left + right) / 2;
 		ctx.font = fontSettingsToCSS(font, middle);
 		const params = ctx.measureText(maxLine);
+		const exampleParams = ctx.measureText(HIGH_TEXT_EXAMPLE);
 		const lineWidth = lineWidthByFontSize(middle);
 		const textWidth = params.actualBoundingBoxLeft + params.actualBoundingBoxRight + lineWidth;
-		const textHeight = lines.reduce((sum, l) => {
+		const textHeight =
+			(exampleParams.actualBoundingBoxDescent + exampleParams.actualBoundingBoxAscent + lineWidth) * lines.length;
+		/* lines.reduce((sum, l) => {
 			const params = ctx.measureText(l);
 			return sum + (params.actualBoundingBoxAscent + params.actualBoundingBoxDescent) + lineWidth;
-		}, 0);
+		}, 0); */
 		const percentW = textWidth / memeWidth;
 		const percentH = textHeight / memeHeight;
 		if (Math.abs(left - right) < 1) {
