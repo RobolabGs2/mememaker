@@ -13,9 +13,18 @@ html(lang="en")
         link(href="https://fonts.cdnfonts.com/css/helvetica-255" rel="stylesheet")
         link(href="https://fonts.cdnfonts.com/css/impact" rel="stylesheet")
         link(href="./style.css" rel="stylesheet")
+        link(href="./docs/markdown.css" rel="stylesheet")
     body
         block scripts
             script(src="./src/index.ts" type="module")
+        header
+            section(id="header-name") Memaker
+                div v 0.1.0
+            section(id="header-links")
+                button Помощь
+                button История изменений
+                button Открыть пример
+                a(href="https://github.com/RobolabGs2/mememaker" target="_blank" rel="noopener noreferrer") GitHub
         article
             section(id="items")
                 section(id="frames" class="frames")

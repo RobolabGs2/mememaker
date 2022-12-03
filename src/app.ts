@@ -136,7 +136,7 @@ export class App {
 	}
 	private brushManager: BrushManager;
 	onChangeActiveFrame = new Array<(app: App) => void>();
-	private busyView = new LoadingView(this.placeholders["downloading"]);
+	public busyView = new LoadingView(this.placeholders["downloading"]);
 	constructor(
 		private placeholders: Record<"downloading" | "empty", HTMLImageElement[]>,
 		patternsImages: Record<string, HTMLImageElement>,
@@ -357,9 +357,10 @@ export class App {
 		});
 		if (project)
 			this.busyView.await(
-				"Opening...",
+				"Открываем...",
 				Meme.fromFile(project).then(frames => this.state.apply(new SetFrames(frames)))
 			);
+		setupAppHeader(this);
 	}
 	private drawPatchHandler = makeDiffHandler(
 		new StateDiffListener([BatchPatchData], (diff, cancel) =>
@@ -451,4 +452,50 @@ export function randomFrom<T>(arr: T[]): T {
 }
 function addButton(text: string, action: () => void, destination: HTMLElement) {
 	HTML.CreateElement("button", HTML.SetText(text), HTML.AddEventListener("click", action), HTML.AppendTo(destination));
+}
+
+import docsMemeExample from "../docs/docs.meme";
+import { HelpWindow } from "./help_window";
+import HelpMd from "../docs/help.html";
+import ChangelogMd from "../docs/changelog.html";
+
+function setupAppHeader(app: App) {
+	const [helpButton, changelogButton, exampleButton] = Array.from(
+		document.querySelectorAll("#header-links > button")
+	) as HTMLButtonElement[];
+	exampleButton.addEventListener("click", () => {
+		app.busyView.await(
+			"Открываем пример...",
+			fetch(docsMemeExample)
+				.then(resp => resp.blob())
+				.then(Meme.fromFile)
+				.then(frames => app.setFrames(frames))
+		);
+	});
+	const appContainer = document.querySelector("body > article") as HTMLElement;
+	appContainer.style.position = "relative";
+	const helpWindow = new HelpWindow(appContainer);
+	let state = "off";
+	Promise.all([fetch(HelpMd), fetch(ChangelogMd)].map(resp => resp.then(r => r.text()))).then(
+		([helpHTML, changelogHTML]) => {
+			helpButton.addEventListener("click", () => {
+				if (state == "help") {
+					helpWindow.hide();
+					state = "off";
+					return;
+				}
+				state = "help";
+				helpWindow.show(helpHTML);
+			});
+			changelogButton.addEventListener("click", () => {
+				if (state == "changelog") {
+					helpWindow.hide();
+					state = "off";
+					return;
+				}
+				state = "changelog";
+				helpWindow.show(changelogHTML);
+			});
+		}
+	);
 }
