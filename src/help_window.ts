@@ -3,7 +3,7 @@ import * as HTML from "./html";
 export class HelpWindow {
 	readonly element: HTMLElement;
 	readonly content: HTMLElement;
-	constructor(parent: HTMLElement = document.body) {
+	constructor(parent: HTMLElement = document.body, readonly onHide: () => void) {
 		this.element = HTML.CreateElement(
 			"article",
 			HTML.AppendTo(parent),
@@ -53,5 +53,6 @@ export class HelpWindow {
 	}
 	hide() {
 		this.element.style.display = "none";
+		this.onHide();
 	}
 }

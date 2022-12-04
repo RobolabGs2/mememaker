@@ -474,14 +474,13 @@ function setupAppHeader(app: App) {
 	});
 	const appContainer = document.querySelector("body > article") as HTMLElement;
 	appContainer.style.position = "relative";
-	const helpWindow = new HelpWindow(appContainer);
 	let state = "off";
+	const helpWindow = new HelpWindow(appContainer, () => (state = "off"));
 	Promise.all([fetch(HelpMd), fetch(ChangelogMd)].map(resp => resp.then(r => r.text()))).then(
 		([helpHTML, changelogHTML]) => {
 			helpButton.addEventListener("click", () => {
 				if (state == "help") {
 					helpWindow.hide();
-					state = "off";
 					return;
 				}
 				state = "help";
@@ -490,7 +489,6 @@ function setupAppHeader(app: App) {
 			changelogButton.addEventListener("click", () => {
 				if (state == "changelog") {
 					helpWindow.hide();
-					state = "off";
 					return;
 				}
 				state = "changelog";
