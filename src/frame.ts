@@ -16,7 +16,8 @@ import { loadSettingsFromURL } from "./url_parser";
 const globalSettings = loadSettingsFromURL({
 	drawDebug: false,
 });
-const HIGH_TEXT_EXAMPLE = "ЁЙДQ";
+const MAX_HEIGHT_TEXT_EXAMPLE =
+	"AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZzАаБбВвГгДдЕеЁёЖжЗзИиЙйКкЛлМмНнОоПпРрСсТтУуФфХхЦцЧчШшЩщЪъЫыЬьЭэЮюЯя";
 
 export type RectangleSide = Record<"right" | "left" | "top" | "bottom" | "center" | "none", boolean>;
 
@@ -101,7 +102,7 @@ export class TextContent {
 		if (totalHeight < box.height) {
 			prevY += (box.height - totalHeight) / 2;
 		}
-		const exampleParams = ctx.measureText(HIGH_TEXT_EXAMPLE);
+		const exampleParams = ctx.measureText(MAX_HEIGHT_TEXT_EXAMPLE);
 		const lines = text.map(t => {
 			const params = ctx.measureText(t);
 			const y = prevY + exampleParams.actualBoundingBoxAscent;
@@ -203,7 +204,7 @@ function calcFontSize(
 		const middle = (left + right) / 2;
 		ctx.font = fontSettingsToCSS(font, middle);
 		const params = ctx.measureText(maxLine);
-		const exampleParams = ctx.measureText(HIGH_TEXT_EXAMPLE);
+		const exampleParams = ctx.measureText(MAX_HEIGHT_TEXT_EXAMPLE);
 		const lineWidth = lineWidthByFontSize(middle);
 		const textWidth = params.actualBoundingBoxLeft + params.actualBoundingBoxRight + lineWidth;
 		const textHeight =
