@@ -27,10 +27,10 @@ const Icons = {
  <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"></path>
  <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"></path>
 </svg>`,
-	Shadow: `<img src="${ShadowIcon}"/>`,
-	Fill: `<img src="${FillIcon}"/>`,
-	Stroke: `<img src="${StrokeIcon}"/>`,
-	Experimental: `<img src="${GearIcon}"/>`,
+	Shadow: `<img width="24px" height="24px" style="margin: 4px;" src="${ShadowIcon}"/>`,
+	Fill: `<img width="24px" height="24px" style="margin: 4px;" src="${FillIcon}"/>`,
+	Stroke: `<img width="24px" height="24px" style="margin: 4px;" src="${StrokeIcon}"/>`,
+	Experimental: `<img width="24px" height="24px" style="margin: 4px;" src="${GearIcon}"/>`,
 };
 
 export default Icons;

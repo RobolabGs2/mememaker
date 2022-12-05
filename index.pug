@@ -17,14 +17,6 @@ html(lang="en")
     body
         block scripts
             script(src="./src/index.ts" type="module")
-        header
-            section(id="header-name") Memaker
-                div v 0.1.0
-            section(id="header-links")
-                button Справка
-                button История изменений
-                button Открыть пример
-                a(href="https://github.com/RobolabGs2/mememaker" target="_blank" rel="noopener noreferrer") GitHub
         article
             section(id="items")
                 section(id="frames" class="frames")
@@ -32,3 +24,10 @@ html(lang="en")
                 canvas(id="main")
                 canvas(id="ui")
             section(id="right-panel")
+                header(id="header-main")
+                    section(id="header-name") Memaker v&nbsp;0.1.1
+                    section(id="header-links")
+                        button Справка
+                        button История изменений
+                        button Открыть пример
+                        a(href="https://github.com/RobolabGs2/mememaker" target="_blank" rel="noopener noreferrer") GitHub

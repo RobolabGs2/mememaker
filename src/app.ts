@@ -476,6 +476,8 @@ import HelpMd from "../docs/help.html";
 import ChangelogMd from "../docs/changelog.html";
 
 function setupAppHeader(app: App) {
+	const header = document.querySelector("#header-main") as HTMLElement;
+	header.parentElement?.append(header);
 	const [helpButton, changelogButton, exampleButton] = Array.from(
 		document.querySelectorAll("#header-links > button")
 	) as HTMLButtonElement[];
