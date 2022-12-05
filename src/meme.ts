@@ -108,9 +108,16 @@ export class Meme {
 	}
 	static scriptCSV(frames: Frame[]): Promise<Blob> {
 		return Promise.resolve(
-			new Blob([frames.map(frame => `"${frame.textContent[0].text.replace(/"/g, '""')}"`).join("\n")], {
-				type: "text/csv",
-			})
+			new Blob(
+				[
+					frames
+						.map(frame => frame.textContent.map(block => `"${block.text.replace(/"/g, '""')}"`).join(","))
+						.join("\n"),
+				],
+				{
+					type: "text/csv",
+				}
+			)
 		);
 	}
 }
