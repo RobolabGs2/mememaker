@@ -6,7 +6,7 @@
 		"start": "npm run build:md && parcel *.pug",
 		"build": "npm run build:md && parcel build index.pug --public-url ./",
 		"build:md:help": "marked -i docs/help.md -o docs/help.html --gfm",
-		"build:md:changelog": "marked -i docs/changelog.md -o docs/changelog.html --gfm",
+		"build:md:changelog": "marked -i docs/CHANGELOG.md -o docs/changelog.html --gfm",
 		"build:md": "npm run build:md:help && npm run build:md:changelog",
 		"build:scss-types": "typed-scss-modules src --nameFormat none --exportType default",
 		"watch:scss-types": "typed-scss-modules src --nameFormat none --exportType default --watch",
