@@ -39,6 +39,10 @@ export function SetInputType(type: string) {
 	return (input: HTMLInputElement) => (input.type = type);
 }
 
+export function SetHTML(html: string) {
+	return (el: HTMLElement) => (el.innerHTML = html);
+}
+
 export function AppendTo(parent: HTMLElement) {
 	return (elem: HTMLElement) => parent.append(elem);
 }

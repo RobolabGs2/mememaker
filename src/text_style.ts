@@ -29,6 +29,12 @@ export interface TextStylePrototype {
 	fill: BrushPath;
 	stroke: BrushPath;
 	shadow: ShadowSettings;
+	experimental: ExperimentalSettings;
+}
+
+export interface ExperimentalSettings {
+	lineWidthCoefficient: number;
+	lineSpacingCoefficient: number;
 }
 
 export interface ShadowSettings {
@@ -118,9 +124,13 @@ export function DefaultStyle(): TextStylePrototype {
 			blur: 10,
 			offset: { x: 0, y: 0 },
 		},
+		experimental: {
+			lineSpacingCoefficient: 0.5,
+			lineWidthCoefficient: 0.1385,
+		},
 	};
 }
 
-export function lineWidthByFontSize(fontSize: number): number {
-	return Math.ceil((18 / 130) * fontSize);
+export function lineWidthByFontSize(fontSize: number, style: TextStylePrototype): number {
+	return Math.ceil(style.experimental.lineWidthCoefficient * fontSize);
 }

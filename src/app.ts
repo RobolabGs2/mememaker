@@ -1,7 +1,7 @@
 import * as HTML from "./html";
 import { downloadBlobAs, downloadImage, readBlobAsURL } from "./http_helpers";
 
-import { Frame, resizeCanvas, TextContent } from "./frame";
+import { Frame, TextContent } from "./frame";
 import { TextSettingsForm } from "./ui/inputs/text_settings_input";
 import { BrushInput } from "./ui/inputs/brush_input";
 import { BatchPatchData, ChangedData, DelegatePatch, PatchData } from "./patch";
@@ -32,6 +32,8 @@ import { RectangleSprite } from "./graphics/sprite";
 import BoxEditor from "./box_editor";
 import { ShadowInput } from "./ui/inputs/shadow_input";
 import styles from "./tabs_container.module.scss";
+import { ExperimentalInput } from "./ui/inputs/experimental_input";
+import Icons from "./ui/icons";
 
 export class DrawContext {
 	constructor(
@@ -72,6 +74,7 @@ function TabsContainer(tabs: { label: HTMLElement; content: HTMLElement; title: 
 	const labels = tabs.map((tab, i) => {
 		return HTML.CreateElement(
 			"section",
+			HTML.SetTitle(tab.title),
 			HTML.AddClass(styles["label"]),
 			HTML.Append(tab.label),
 			HTML.AddEventListener("click", ev => {
@@ -198,17 +201,30 @@ export class App {
 				this.state.apply(new ChangedData<State, ["activeText", ["text"]]>(["activeText", ["text"]], newValue)),
 			6
 		);
+		const experimentalInput = new ExperimentalInput(newValue =>
+			applyPatch(new DelegatePatch(["experimental"], newValue))
+		);
 		this.onChangeActiveFrame.push(app => {
 			textSettingsInput.update(app.state.activeText.style);
 			fillBrushInput.update(app.state.activeText.style.fill);
 			strokeBrushInput.update(app.state.activeText.style.stroke);
 			shadowInput.update(app.state.activeText.style.shadow);
 			textInput.update(app.state.activeText.text);
+			experimentalInput.update(app.state.activeText.style.experimental);
 		});
 		const styleSettingsContainer = TabsContainer([
-			{ title: "Fill", label: HTML.CreateElement("div", HTML.SetText("Заливка")), content: fillBrushInput.element },
-			{ title: "Stroke", label: HTML.CreateElement("div", HTML.SetText("Обводка")), content: strokeBrushInput.element },
-			{ title: "Shadow", label: HTML.CreateElement("div", HTML.SetText("Тень")), content: shadowInput.element },
+			{ title: "Заливка", label: HTML.CreateElement("div", HTML.SetHTML(Icons.Fill)), content: fillBrushInput.element },
+			{
+				title: "Обводка",
+				label: HTML.CreateElement("div", HTML.SetHTML(Icons.Stroke)),
+				content: strokeBrushInput.element,
+			},
+			{ title: "Тень", label: HTML.CreateElement("div", HTML.SetHTML(Icons.Shadow)), content: shadowInput.element },
+			{
+				title: "Экспериментальное",
+				label: HTML.CreateElement("div", HTML.SetHTML(Icons.Experimental)),
+				content: experimentalInput.element,
+			},
 		]);
 		const blockPropertiesContainer = HTML.ModifyElement(
 			TabsContainer([

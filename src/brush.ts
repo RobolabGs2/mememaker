@@ -43,7 +43,7 @@ export class BrushManager {
 		const testString = "ЙДЁ";
 		ctx.font = fontSettingsToCSS(style.font, fontSize);
 		const testParams = ctx.measureText(testString);
-		ctx.lineWidth = lineWidthByFontSize(fontSize);
+		ctx.lineWidth = lineWidthByFontSize(fontSize, style);
 		this.setBrush("fillStyle", ctx, style.fill, testParams);
 		this.setBrush("strokeStyle", ctx, style.stroke, testParams);
 	}

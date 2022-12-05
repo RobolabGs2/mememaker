@@ -62,7 +62,7 @@ export class TextContent {
 			ctx.strokeText(line, x, y);
 			ctx.fillText(line, x, y);
 			if (globalSettings.drawDebug) {
-				drawBoundsOfText(ctx, x, y, line, fontSize);
+				drawBoundsOfText(ctx, x, y, line, fontSize, this.style);
 				brushManager.setupCtxForText(ctx, this.style, fontSize);
 			}
 		});
@@ -79,9 +79,12 @@ export class TextContent {
 		});
 		const x = ctx.canvas.width / 2;
 		const fontSize = calcTextWidthOld(ctx, maxLine, font, text.length);
-		const testString = "ЙДЁ";
-		const testParams = ctx.measureText(testString);
-		const fullHeight = testParams.actualBoundingBoxAscent + testParams.actualBoundingBoxDescent;
+		const lineWidth = lineWidthByFontSize(fontSize, this.style);
+		const testParams = ctx.measureText(MAX_HEIGHT_TEXT_EXAMPLE);
+		const fullHeight =
+			testParams.actualBoundingBoxAscent +
+			testParams.actualBoundingBoxDescent +
+			lineWidth * this.style.experimental.lineSpacingCoefficient;
 		const y = ctx.canvas.height - fontSize / (1.5 + text.length * 0.5);
 		const lines = text.map((_, i) => {
 			const ly = y - (text.length - i - 1) * fullHeight;
@@ -95,8 +98,8 @@ export class TextContent {
 		text: string[],
 		box: RectangleSprite
 	): { lines: Point[]; fontSize: number } {
-		const [fontSize, totalHeight] = calcFontSize(ctx, text, font, this.box);
-		const lineWidth = lineWidthByFontSize(fontSize);
+		const [fontSize, totalHeight] = calcFontSize(ctx, text, font, this.box, this.style);
+		const lineWidth = lineWidthByFontSize(fontSize, this.style);
 		const x = box.x - lineWidth / 2;
 		let prevY = box.top + lineWidth / 2;
 		if (totalHeight < box.height) {
@@ -106,7 +109,7 @@ export class TextContent {
 		const lines = text.map(t => {
 			const params = ctx.measureText(t);
 			const y = prevY + exampleParams.actualBoundingBoxAscent;
-			prevY = y + exampleParams.actualBoundingBoxDescent + lineWidth;
+			prevY = y + exampleParams.actualBoundingBoxDescent + lineWidth * this.style.experimental.lineSpacingCoefficient;
 			const textWidth = params.actualBoundingBoxLeft + params.actualBoundingBoxRight;
 			const shiftX = textWidth / 2 - params.actualBoundingBoxLeft - lineWidth / 2;
 			return { x: x - shiftX, y };
@@ -183,7 +186,8 @@ function calcFontSize(
 	ctx: CanvasRenderingContext2D,
 	lines: string[],
 	font: FontSettings,
-	box: RectangleSprite
+	box: RectangleSprite,
+	style: TextStylePrototype
 ): [number, number] {
 	let maxLine = lines[0];
 	let maxWidth = 0;
@@ -205,10 +209,13 @@ function calcFontSize(
 		ctx.font = fontSettingsToCSS(font, middle);
 		const params = ctx.measureText(maxLine);
 		const exampleParams = ctx.measureText(MAX_HEIGHT_TEXT_EXAMPLE);
-		const lineWidth = lineWidthByFontSize(middle);
+		const lineWidth = lineWidthByFontSize(middle, style);
 		const textWidth = params.actualBoundingBoxLeft + params.actualBoundingBoxRight + lineWidth;
 		const textHeight =
-			(exampleParams.actualBoundingBoxDescent + exampleParams.actualBoundingBoxAscent + lineWidth) * lines.length;
+			(exampleParams.actualBoundingBoxDescent +
+				exampleParams.actualBoundingBoxAscent +
+				lineWidth * style.experimental.lineSpacingCoefficient) *
+			lines.length;
 		/* lines.reduce((sum, l) => {
 			const params = ctx.measureText(l);
 			return sum + (params.actualBoundingBoxAscent + params.actualBoundingBoxDescent) + lineWidth;
@@ -224,7 +231,14 @@ function calcFontSize(
 	}
 }
 
-function drawBoundsOfText(ctx: CanvasRenderingContext2D, x: number, y: number, line: string, fontSize: number) {
+function drawBoundsOfText(
+	ctx: CanvasRenderingContext2D,
+	x: number,
+	y: number,
+	line: string,
+	fontSize: number,
+	style: TextStylePrototype
+) {
 	const params = ctx.measureText(line);
 	ctx.strokeStyle = "#FF0000";
 	ctx.lineWidth = 1;
@@ -245,7 +259,7 @@ function drawBoundsOfText(ctx: CanvasRenderingContext2D, x: number, y: number, l
 	ctx.stroke();
 	ctx.strokeStyle = "#FF00FF";
 	ctx.lineWidth = 1;
-	const w = lineWidthByFontSize(fontSize);
+	const w = lineWidthByFontSize(fontSize, style);
 	ctx.strokeRect(
 		x - params.actualBoundingBoxLeft - w / 2,
 		y - params.actualBoundingBoxAscent - w / 2,
