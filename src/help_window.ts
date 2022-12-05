@@ -33,8 +33,6 @@ export class HelpWindow {
 				style.boxSizing = "border-box";
 				style.width = "80%";
 				style.maxWidth = "752px";
-				style.backgroundColor = "black";
-				style.color = "white";
 				style.paddingBottom = "32px";
 				style.zIndex = "101";
 				style.padding = "8px 16px";

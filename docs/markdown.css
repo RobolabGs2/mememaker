@@ -2,7 +2,7 @@
 Source: https://github.com/sindresorhus/github-markdown-css
 */
 
-@media (prefers-color-scheme: dark) {
+/* @media (prefers-color-scheme: dark) { */
 	.markdown-body {
 		color-scheme: dark;
 		--color-prettylights-syntax-comment: #8b949e;
@@ -48,8 +48,8 @@ Source: https://github.com/sindresorhus/github-markdown-css
 		--color-attention-subtle: rgba(187, 128, 9, 0.15);
 		--color-danger-fg: #f85149;
 	}
-}
-
+/* } */
+/* 
 @media (prefers-color-scheme: light) {
 	.markdown-body {
 		color-scheme: light;
@@ -96,7 +96,7 @@ Source: https://github.com/sindresorhus/github-markdown-css
 		--color-attention-subtle: #fff8c5;
 		--color-danger-fg: #cf222e;
 	}
-}
+} */
 
 .markdown-body {
 	-ms-text-size-adjust: 100%;
@@ -110,6 +110,11 @@ Source: https://github.com/sindresorhus/github-markdown-css
 	line-height: 1.5;
 	word-wrap: break-word;
 }
+
+.markdown-body table {
+	color: var(--color-fg-default);
+}
+
 
 .markdown-body .octicon {
 	display: inline-block;
@@ -249,7 +254,6 @@ Source: https://github.com/sindresorhus/github-markdown-css
 .markdown-body [type="submit"] {
 	-webkit-appearance: button;
 }
-
 
 .markdown-body [type="checkbox"],
 .markdown-body [type="radio"] {
