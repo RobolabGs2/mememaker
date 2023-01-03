@@ -35,6 +35,7 @@ export interface TextStylePrototype {
 export interface ExperimentalSettings {
 	lineWidthCoefficient: number;
 	lineSpacingCoefficient: number;
+	interpolationPoint: number;
 }
 
 export interface ShadowSettings {
@@ -127,6 +128,7 @@ export function DefaultStyle(): TextStylePrototype {
 		experimental: {
 			lineSpacingCoefficient: 0.5,
 			lineWidthCoefficient: 0.1385,
+			interpolationPoint: 100,
 		},
 	};
 }

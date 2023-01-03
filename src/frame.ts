@@ -99,6 +99,7 @@ export class TextContent {
 		box: RectangleSprite
 	): { lines: Point[]; fontSize: number } {
 		const [fontSize, totalHeight] = calcFontSize(ctx, text, font, this.box, this.style);
+		ctx.font = fontSettingsToCSS(font, fontSize);
 		const lineWidth = lineWidthByFontSize(fontSize, this.style);
 		const x = box.x - lineWidth / 2;
 		let prevY = box.top + lineWidth / 2;
@@ -190,45 +191,40 @@ function calcFontSize(
 	style: TextStylePrototype
 ): [number, number] {
 	let maxLine = lines[0];
-	let maxWidth = 0;
-	lines.forEach(line => {
-		const params = ctx.measureText(line);
-		const width = params.actualBoundingBoxLeft + params.actualBoundingBoxRight;
-		if (width > maxWidth) {
-			maxLine = line;
-			maxWidth = width;
-		}
-	});
+	{
+		let maxWidth = 0;
+		lines.forEach(line => {
+			const params = ctx.measureText(line);
+			const width = params.actualBoundingBoxLeft + params.actualBoundingBoxRight;
+			if (width > maxWidth) {
+				maxLine = line;
+				maxWidth = width;
+			}
+		});
+	}
 	const memeWidth = Math.abs(box.width);
 	const memeHeight = Math.abs(box.height);
 	if (memeHeight < 2 || memeWidth < 2) return [0, memeHeight];
-	let left = 1;
-	let right = memeHeight;
-	for (;;) {
-		const middle = (left + right) / 2;
-		ctx.font = fontSettingsToCSS(font, middle);
-		const params = ctx.measureText(maxLine);
-		const exampleParams = ctx.measureText(MAX_HEIGHT_TEXT_EXAMPLE);
-		const lineWidth = lineWidthByFontSize(middle, style);
-		const textWidth = params.actualBoundingBoxLeft + params.actualBoundingBoxRight + lineWidth;
-		const textHeight =
-			(exampleParams.actualBoundingBoxDescent +
-				exampleParams.actualBoundingBoxAscent +
-				lineWidth * style.experimental.lineSpacingCoefficient) *
-			lines.length;
-		/* lines.reduce((sum, l) => {
-			const params = ctx.measureText(l);
-			return sum + (params.actualBoundingBoxAscent + params.actualBoundingBoxDescent) + lineWidth;
-		}, 0); */
-		const percentW = textWidth / memeWidth;
-		const percentH = textHeight / memeHeight;
-		if (Math.abs(left - right) < 1) {
-			return [middle, textHeight];
-		}
-		if (percentW > 1 || percentH > 1) {
-			right = middle;
-		} else left = middle;
-	}
+	const dx = style.experimental.interpolationPoint;
+	const maxLineWidth = lineWidthByFontSize(dx, style);
+	ctx.font = fontSettingsToCSS(font, dx);
+	const maxParam = ctx.measureText(maxLine);
+	const maxExample = ctx.measureText(MAX_HEIGHT_TEXT_EXAMPLE);
+	const dWidth = maxParam.actualBoundingBoxLeft + maxParam.actualBoundingBoxRight + maxLineWidth;
+	const dHeight =
+		(maxExample.actualBoundingBoxAscent +
+			maxExample.actualBoundingBoxDescent +
+			maxLineWidth * style.experimental.lineSpacingCoefficient) *
+		lines.length;
+
+	const kWidth = dWidth / dx;
+	const kHeight = dHeight / dx;
+	const xWidthCandidate = Math.round(memeWidth / kWidth);
+	const xHeightCandidate = Math.round(memeHeight / kHeight);
+
+	const fontSize = Math.min(xHeightCandidate, xWidthCandidate);
+	const totalHeight = fontSize * kHeight;
+	return [fontSize, totalHeight];
 }
 
 function drawBoundsOfText(
