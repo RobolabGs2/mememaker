@@ -11,11 +11,11 @@ import {
 	Transform,
 } from "./graphics/sprite";
 import { BatchPatchData, ChangedData, DelegatePatch, PatchData } from "./patch";
-import { State } from "./state";
+import { SetActiveText, State } from "./state";
 import { CanvasCursor } from "./ui/cursor";
 import * as PointUtils from "./geometry/point_utils";
 import { DrawContext } from "./app";
-import { resizeCanvas } from "./frame";
+import { resizeCanvas, TextContent } from "./frame";
 import { SpriteSystem, Sprite } from "./graphics/sprite_system";
 
 export default class BoxEditor {
@@ -26,8 +26,19 @@ export default class BoxEditor {
 	constructor(readonly ctx: DrawContext, readonly state: State) {
 		this.sprites = new SpriteSystem(ctx.main.canvas, sprite => {
 			const getPatch = this.handlers.get(sprite);
-			if (!getPatch) return;
 			const state = this.state;
+			if (!getPatch) {
+				const block = this.selectors.get(sprite);
+				if (!block) return;
+				return {
+					move() {
+						return;
+					},
+					drop() {
+						state.apply(new SetActiveText(block));
+					},
+				};
+			}
 			const box = state.activeText.box;
 			return {
 				move(from, to, cursor) {
@@ -64,15 +75,37 @@ export default class BoxEditor {
 		this.sprites.draw(ctx);
 		ctx.restore();
 	}
-	private add(
+	private addModifier(
 		sprite: Sprite,
 		handler: (from: Point, to: Point, cursor: CanvasCursor, box: RectangleSprite) => PatchData<RectangleSprite>
 	) {
 		this.handlers.set(this.sprites.add(sprite), handler);
 	}
+	private selectors: Map<Sprite, TextContent> = new Map();
+	private addSelector(block: TextContent) {
+		const sprite = this.sprites.add(
+			new DragAndDropPolygon(createRectangle(block.box.width, block.box.height), block.box.transform, true, {
+				fill: {
+					hover: `#aaaaaa22`,
+					active: `#aaaaaa44`,
+				},
+				stroke: {
+					hover: `#aaaaaa99`,
+					active: `#aaaaaa`,
+				},
+			})
+		);
+		this.selectors.set(sprite, block);
+	}
 	setup() {
 		this.sprites.clear();
 		this.handlers.clear();
+
+		this.state.activeFrame.textContent.forEach(block => {
+			if (block === this.state.activeText || block.main) return;
+			this.addSelector(block);
+		});
+
 		if (this.state.activeText.main) return;
 		const r = this.sprites.add(this.state.activeText.box);
 		const uiUnit = 18 * this.cursor.scale;
@@ -90,9 +123,9 @@ export default class BoxEditor {
 			true,
 			alphaGradient("#ff0000")
 		);
-		this.add(arrX, moveAlong(arrX));
-		this.add(arrY, moveAlong(arrY));
-		this.add(
+		this.addModifier(arrX, moveAlong(arrX));
+		this.addModifier(arrY, moveAlong(arrY));
+		this.addModifier(
 			new DragAndDropPolygon(
 				createRectangle(uiUnit * 2, uiUnit * 2),
 				new Transform(0, 0, 0, r.transform),
@@ -115,7 +148,7 @@ export default class BoxEditor {
 			true,
 			alphaGradient("#00ff00")
 		);
-		this.add(arrRotate, rotationPatch);
+		this.addModifier(arrRotate, rotationPatch);
 		[
 			{ dim: "width" as const, dir: { x: 1, y: 0 } },
 			{ dim: "width" as const, dir: { x: -1, y: 0 } },
@@ -126,7 +159,7 @@ export default class BoxEditor {
 				dim === "height"
 					? () => createRectangle(this.state.activeText.box.width - uiUnit, uiUnit)
 					: () => createRectangle(uiUnit, this.state.activeText.box.height - uiUnit);
-			this.add(
+			this.addModifier(
 				new DragAndDropCalculatedPolygon(
 					rectangle,
 					new DynamicTransform(
@@ -147,7 +180,7 @@ export default class BoxEditor {
 			{ x: -1, y: -1 },
 			{ x: 1, y: -1 },
 		].forEach(dir => {
-			this.add(
+			this.addModifier(
 				new DragAndDropPolygon(
 					createRectangle(uiUnit, uiUnit),
 					new DynamicTransform(

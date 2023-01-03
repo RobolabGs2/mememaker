@@ -67,7 +67,7 @@ export class SpriteSystem {
 			}
 			return;
 		}
-		if (this.hoveredSprite?.contains(this.cursor.position)) return;
+		// if (this.hoveredSprite?.contains(this.cursor.position)) return;
 		this.hoveredSprite = undefined;
 		for (let i = this.sprites.length - 1; i >= 0; i--) {
 			const sprite = this.sprites[i];
