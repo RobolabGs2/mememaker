@@ -148,6 +148,7 @@ export class App {
 	) {
 		this.busyView.up("Loading...");
 		setTimeout(() => this.busyView.down("Loading..."));
+		this.busyView.await("Loading fonts...", HTML.forceLoadFonts(document.fonts));
 		this.state = new State([new Frame(randomFrom(placeholders.empty), `Hello meme! Write text here >>>>>>`)]);
 		const animationFrame = () => {
 			this.uiDraw();

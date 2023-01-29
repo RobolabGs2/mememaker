@@ -35,17 +35,22 @@ export class LoadingView {
 			})
 		);
 	}
-	private counter = 0;
+	private jobs = new Array<string>();
 	up(msg: string) {
-		this.counter++;
+		this.jobs.push(msg);
 		this.element.style.backgroundImage = `url(${randomFrom(this.placeholders).src}) `;
 		this.text.textContent = msg;
 		this.element.style.display = "flex";
 	}
 	down(msg: string) {
-		this.counter--;
-		if (this.counter === 0) this.element.style.display = "none";
-		if (this.counter < 0) console.log(`Logic error: LoadingView.down for ${msg}`);
+		const jobIndex = this.jobs.lastIndexOf(msg);
+		if (jobIndex === -1) {
+			console.error(`Logic error: LoadingView: not expected job for down: ${msg}`);
+			return;
+		}
+		this.jobs.splice(jobIndex, 1);
+		if (this.jobs.length === 0) this.element.style.display = "none";
+		this.text.textContent = this.jobs[this.jobs.length - 1];
 	}
 	await<T>(msg: string, promise: Promise<T>) {
 		this.up(msg);
