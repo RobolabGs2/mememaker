@@ -27,7 +27,7 @@ import { LoadingView } from "./loading_view";
 import TextInput from "./ui/inputs/text_input";
 import FilesInput from "./ui/inputs/file_input";
 import { BrushManager } from "./brush";
-import { TextStylePrototype, DefaultStyle } from "./text_style";
+import { TextStylePrototype, DefaultStyle, deepCopyTextStyle, StylePresets } from "./text_style";
 import { RectangleSprite } from "./graphics/sprite";
 import BoxEditor from "./box_editor";
 import { ShadowInput } from "./ui/inputs/shadow_input";
@@ -205,6 +205,28 @@ export class App {
 		const experimentalInput = new ExperimentalInput(newValue =>
 			applyPatch(new DelegatePatch(["experimental"], newValue))
 		);
+		const presetsSelector = HTML.CreateSelector(
+			"Выбрать пресет...",
+			["Выбрать пресет...", ...StylePresets.map(p => p.name)],
+			value => {
+				const s = StylePresets.find(x => x.name === value);
+				if (!s) return;
+				this.state.apply(
+					new ChangedData<State, ["activeText", ["style"]]>(["activeText", ["style"]], deepCopyTextStyle(s))
+				);
+				presetsSelector.value = "Выбрать пресет...";
+			},
+			HTML.SetStyles(styles => {
+				styles.width = "100%";
+				styles.height = "24px";
+			}),
+			HTML.ModifyChildren(el => {
+				const op = el as HTMLOptionElement;
+				const s = StylePresets.find(x => x.name === op.text);
+				if (!s) return;
+				op.style.fontFamily = s.font.family;
+			})
+		);
 		this.onChangeActiveFrame.push(app => {
 			textSettingsInput.update(app.state.activeText.style);
 			fillBrushInput.update(app.state.activeText.style.fill);
@@ -234,7 +256,7 @@ export class App {
 					label: HTML.CreateElement("span", HTML.SetText("Текст")),
 					content: HTML.CreateElement(
 						"article",
-						HTML.Append(textSettingsInput.element, textInput.element, styleSettingsContainer)
+						HTML.Append(presetsSelector, textSettingsInput.element, textInput.element, styleSettingsContainer)
 					),
 				},
 				{
@@ -383,8 +405,9 @@ export class App {
 		new StateDiffListener([BatchPatchData], (diff, cancel) =>
 			diff.patches.forEach(patch => this.drawPatchHandler(patch, cancel))
 		),
-		new StateDiffListener([ChangedData, DelegatePatch], (_, cancel) => {
-			if (cancel) this.onChangeActiveFrame.forEach(v => v(this));
+		new StateDiffListener([ChangedData, DelegatePatch], () => {
+			// TODO: update only selected fields
+			this.onChangeActiveFrame.forEach(v => v(this));
 			this.contentViews.updatePreview(this.state.activeText);
 		}),
 		new StateDiffListener([AddFrame], diff => this.framesViews.add(diff.frame)),
@@ -414,11 +437,14 @@ export class App {
 	);
 	addFrame(img: HTMLImageElement = randomFrom(this.placeholders.empty)) {
 		const newFrame = new Frame(img, "");
+		const currentStyle = deepCopyTextStyle(this.state.activeText.style);
+		newFrame.textContent[0].style = currentStyle;
 		this.state.apply(new AddFrame(newFrame));
 		this.setActive(newFrame);
 	}
 	addText() {
 		const frame = this.state.activeFrame;
+		const currentStyle = deepCopyTextStyle(this.state.activeText.style);
 		const newText = new TextContent(
 			new RectangleSprite(
 				frame.image.width / 2,
@@ -429,7 +455,7 @@ export class App {
 				{ fill: {}, stroke: { default: "#aaaa00 " } }
 			),
 			"New text",
-			DefaultStyle()
+			currentStyle
 		);
 		this.state.apply(new AddContent(newText));
 		this.setActiveText(newText);

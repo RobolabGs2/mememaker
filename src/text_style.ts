@@ -136,3 +136,196 @@ export function DefaultStyle(): TextStylePrototype {
 export function lineWidthByFontSize(fontSize: number, style: TextStylePrototype): number {
 	return Math.ceil(style.experimental.lineWidthCoefficient * fontSize);
 }
+
+export function deepCopyTextStyle(style: TextStylePrototype): TextStylePrototype {
+	return JSON.parse(JSON.stringify(style));
+}
+
+export const StylePresets: Array<TextStylePrototype> = [
+	{
+		name: "TRUE IMPACT",
+		case: "UPPER",
+		fill: {
+			name: "#ffffff",
+			type: "color",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		stroke: {
+			name: "#000000",
+			type: "color",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		font: {
+			bold: false,
+			family: "Impact",
+			italic: false,
+			smallCaps: false,
+		},
+		shadow: {
+			enabled: false,
+			color: "#000000",
+			blur: 10,
+			offset: { x: 0, y: 0 },
+		},
+		experimental: {
+			lineSpacingCoefficient: 0.5,
+			lineWidthCoefficient: 0.1385,
+			interpolationPoint: 100,
+		},
+	},
+	{
+		name: "post-ironic lobster",
+		case: "lower",
+		fill: {
+			name: "#ffffff",
+			type: "color",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		stroke: {
+			name: "#000000",
+			type: "none",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		font: {
+			bold: false,
+			family: "Lobster",
+			italic: false,
+			smallCaps: false,
+		},
+		shadow: {
+			enabled: true,
+			color: "#000000",
+			blur: 15,
+			offset: { x: 0, y: 0 },
+		},
+		experimental: {
+			lineSpacingCoefficient: 0.5,
+			lineWidthCoefficient: 0.1385,
+			interpolationPoint: 100,
+		},
+	},
+	{
+		name: "Arial subtitles",
+		case: "As is",
+		fill: {
+			name: "#ffffff",
+			type: "color",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		stroke: {
+			name: "#000000",
+			type: "color",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		font: {
+			bold: false,
+			family: "Arial",
+			italic: false,
+			smallCaps: false,
+		},
+		shadow: {
+			enabled: false,
+			color: "#000000",
+			blur: 10,
+			offset: { x: 0, y: 0 },
+		},
+		experimental: {
+			lineSpacingCoefficient: 0.5,
+			lineWidthCoefficient: 0.1385,
+			interpolationPoint: 100,
+		},
+	},
+	{
+		name: "Arial bold subtitles",
+		case: "As is",
+		fill: {
+			name: "#ffffff",
+			type: "color",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		stroke: {
+			name: "#000000",
+			type: "color",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		font: {
+			bold: true,
+			family: "Arial",
+			italic: false,
+			smallCaps: false,
+		},
+		shadow: {
+			enabled: false,
+			color: "#000000",
+			blur: 10,
+			offset: { x: 0, y: 0 },
+		},
+		experimental: {
+			lineSpacingCoefficient: 0.5,
+			lineWidthCoefficient: 0.1385,
+			interpolationPoint: 100,
+		},
+	},
+	{
+		name: "Black Arial",
+		case: "As is",
+		fill: {
+			name: "#000000",
+			type: "color",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		stroke: {
+			name: "#000000",
+			type: "none",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		font: {
+			bold: false,
+			family: "Arial",
+			italic: false,
+			smallCaps: false,
+		},
+		shadow: {
+			enabled: false,
+			color: "#000000",
+			blur: 10,
+			offset: { x: 0, y: 0 },
+		},
+		experimental: {
+			lineSpacingCoefficient: 0.5,
+			lineWidthCoefficient: 0.1385,
+			interpolationPoint: 100,
+		},
+	},
+	{
+		name: "Black Arial bold",
+		case: "As is",
+		fill: {
+			name: "#000000",
+			type: "color",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		stroke: {
+			name: "#000000",
+			type: "none",
+			patternSettings: { rotate: 0, scale: { x: 1, y: 1 }, shift: { x: 0, y: 0 } },
+		},
+		font: {
+			bold: true,
+			family: "Arial",
+			italic: false,
+			smallCaps: false,
+		},
+		shadow: {
+			enabled: false,
+			color: "#000000",
+			blur: 10,
+			offset: { x: 0, y: 0 },
+		},
+		experimental: {
+			lineSpacingCoefficient: 0.5,
+			lineWidthCoefficient: 0.1385,
+			interpolationPoint: 100,
+		},
+	},
+];
