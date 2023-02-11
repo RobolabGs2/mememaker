@@ -122,7 +122,7 @@ export class Meme {
 	}
 }
 
-function getBlobFromCanvas(canvas: HTMLCanvasElement): Promise<Blob> {
+export function getBlobFromCanvas(canvas: HTMLCanvasElement): Promise<Blob> {
 	return new Promise((resolve, reject) => {
 		canvas.toBlob(blob => {
 			if (!blob) {

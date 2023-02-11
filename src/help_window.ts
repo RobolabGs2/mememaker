@@ -49,6 +49,11 @@ export class HelpWindow {
 		this.content.innerHTML = html;
 		this.element.style.display = "flex";
 	}
+	show2(html: HTMLElement) {
+		this.content.innerHTML = "";
+		this.element.style.display = "flex";
+		this.content.append(html);
+	}
 	hide() {
 		this.element.style.display = "none";
 		this.onHide();

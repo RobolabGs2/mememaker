@@ -19,7 +19,7 @@ import {
 	StateDiffListener,
 	RemoveContent,
 } from "./state";
-import { Meme } from "./meme";
+import { getBlobFromCanvas, Meme } from "./meme";
 import { FramePreview } from "./frame_preview";
 import { ContentPreview } from "./content_preview";
 import PreviewListContainer from "./ui/preview_container";
@@ -34,6 +34,7 @@ import { ShadowInput } from "./ui/inputs/shadow_input";
 import styles from "./tabs_container.module.scss";
 import { ExperimentalInput } from "./ui/inputs/experimental_input";
 import Icons from "./ui/icons";
+import VK, { VkApiGroup, VkScope, VkUploadPhotoOnWall } from "./vk_open_api";
 
 export class DrawContext {
 	constructor(
@@ -352,7 +353,11 @@ export class App {
 					this.busyView.await("Packing project...", Meme.toFile(this.state.frames).then(downloadBlobAs("meme.meme"))),
 				projectActionsContainer
 			);
-
+			addButton(
+				"VK",
+				() => VK.Auth.login(console.log, VkScope.wall | VkScope.groups | VkScope.photos),
+				projectActionsContainer
+			);
 			const memeInput = new FilesInput(".meme", files => {
 				const file = files[0];
 				this.busyView.await(
@@ -366,7 +371,12 @@ export class App {
 					s.padding = "4px";
 				})
 			)(projectActionsContainer);
-			projectActionsContainer.append("Открыть meme project:", memeInput.element);
+			projectActionsContainer.append(
+				"Открыть meme project:",
+				memeInput.element,
+				HTML.CreateElement("div", HTML.SetId("vk_auth")),
+				HTML.CreateElement("div", HTML.SetId("vk_button"))
+			);
 		}
 		document.addEventListener("keydown", ev => {
 			if (ev.ctrlKey && ev.code === "KeyZ") {
@@ -400,6 +410,71 @@ export class App {
 				Meme.fromFile(project).then(frames => this.state.apply(new SetFrames(frames)))
 			);
 		setupAppHeader(this);
+		VK.init({ apiId: APP_ID });
+		// VK.Widgets.Auth("vk_auth", {
+		// eslint-disable-next-line @typescript-eslint/no-empty-function
+		// onAuth: () => {},
+		// });
+		VK.Observer.subscribe("auth.login", r => {
+			console.log(r);
+			if (r.session) {
+				VK.Api.call("groups.get", { user_id: r.session.mid, v: "5.131", fields: "can_post", extended: 1 }, r => {
+					if (r.error) {
+						console.log(r.error);
+						return;
+					}
+					const resp = r.response!;
+					console.log(`Total count: ${resp.count}`);
+					const canPost = (resp.items as VkApiGroup[]).filter(g => {
+						return g.can_post;
+					});
+					console.log(canPost.length);
+					const appContainer = document.querySelector("body > article") as HTMLElement;
+					const w = new HelpWindow(appContainer, () => {});
+					w.show2(
+						HTML.CreateElement(
+							"article",
+							HTML.SetStyles(s => {
+								s.display = "flex";
+								s.flexDirection = "column";
+							}),
+							HTML.Append(
+								canPost.map(g =>
+									HTML.CreateElement(
+										"button",
+										HTML.Append(
+											HTML.CreateElement("img", el => (el.src = g.photo_50)),
+											HTML.CreateElement("span", HTML.SetText(g.name))
+										),
+										HTML.AddEventListener("click", () => {
+											const future = new Date();
+											future.setDate(future.getDate() + 365);
+											getBlobFromCanvas(this.ctx.main.canvas).then(blob => {
+												VkUploadPhotoOnWall(VK, -g.id, blob).then(photo => {
+													console.log(photo);
+													VK.Api.call(
+														"wall.post",
+														{
+															v: "5.131",
+															owner_id: -g.id,
+															from_group: 1,
+															message: "Привет из мемейкера!",
+															attachments: `photo${photo.owner_id}_${photo.id}`,
+															publish_date: Math.floor(future.getTime() / 1000),
+														},
+														console.log
+													);
+												});
+											});
+										})
+									)
+								)
+							)
+						)
+					);
+				});
+			}
+		});
 	}
 	private drawPatchHandler = makeDiffHandler(
 		new StateDiffListener([BatchPatchData], (diff, cancel) =>

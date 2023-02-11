@@ -3,7 +3,7 @@
 	"version": "0.0.0",
 	"description": "Web app for create memes",
 	"scripts": {
-		"start": "npm run build:md && parcel *.pug",
+		"start": "npm run build:md && parcel -p 80 *.pug",
 		"build": "npm run build:md && parcel build index.pug --public-url ./",
 		"build:md:help": "marked -i docs/help.md -o docs/help.html --gfm",
 		"build:md:changelog": "marked -i docs/CHANGELOG.md -o docs/changelog.html --gfm",
