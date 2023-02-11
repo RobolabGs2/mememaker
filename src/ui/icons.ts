@@ -5,6 +5,8 @@ import FillIcon from "../../assets/icons/fill.png";
 import StrokeIcon from "../../assets/icons/stroke.png";
 import ShadowIcon from "../../assets/icons/shadow.png";
 import GearIcon from "../../assets/icons/gear.png";
+import UndoIcon from "../../assets/icons/undo.png";
+import RedoIcon from "../../assets/icons/redo.png";
 
 const Icons = {
 	ArrowUp: `<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-arrow-up" width="16" height="16" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -31,6 +33,8 @@ const Icons = {
 	Fill: `<img width="24px" height="24px" style="margin: 4px;" src="${FillIcon}"/>`,
 	Stroke: `<img width="24px" height="24px" style="margin: 4px;" src="${StrokeIcon}"/>`,
 	Experimental: `<img width="24px" height="24px" style="margin: 4px;" src="${GearIcon}"/>`,
+	Undo: `<img width="24px" height="24px" style="margin: 4px;" src="${UndoIcon}"/>`,
+	Redo: `<img width="24px" height="24px" style="margin: 4px;" src="${RedoIcon}"/>`,
 };
 
 export default Icons;

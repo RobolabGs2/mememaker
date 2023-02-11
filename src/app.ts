@@ -19,7 +19,7 @@ import {
 	StateDiffListener,
 	RemoveContent,
 } from "./state";
-import { Meme } from "./meme";
+import { getBlobFromCanvas, Meme } from "./meme";
 import { FramePreview } from "./frame_preview";
 import { ContentPreview } from "./content_preview";
 import PreviewListContainer from "./ui/preview_container";
@@ -174,6 +174,18 @@ export class App {
 		const textsContainer = HTML.CreateElement("section", HTML.SetId("current-frame"), HTML.AddClass("frames"));
 		textsContainer.append(this.contentViews.element);
 		addButton("Добавить блок с текстом", () => this.addText(), textsContainer);
+
+		HTML.ModifyElement(
+			document.getElementById("controls")!,
+			HTML.Append(
+				[
+					{ icon: Icons.Undo, action: () => this.state.undo() },
+					{ icon: Icons.Redo, action: () => this.state.redo() },
+				].map(({ icon, action }) => {
+					return HTML.CreateElement("button", HTML.SetHTML(icon), HTML.AddEventListener("click", action));
+				})
+			)
+		);
 
 		const properties = document.querySelector("section#right-panel") as HTMLElement;
 		const urlInput = new FilesInput("image/*", files => {
@@ -333,7 +345,9 @@ export class App {
 				() =>
 					this.busyView.await(
 						"Rendering...",
-						Meme.renderToZIP(this.state.frames, this.brushManager).then(downloadBlobAs("meme.zip"))
+						this.state.frames.length > 1
+							? Meme.renderToZIP(this.state.frames, this.brushManager).then(downloadBlobAs("meme.zip"))
+							: getBlobFromCanvas(this.ctx.main.canvas).then(downloadBlobAs("meme.png"))
 					),
 				projectActionsContainer
 			);

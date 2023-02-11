@@ -25,20 +25,22 @@ export class SpriteSystem {
 		this.cursor = new CanvasCursor(
 			canvas,
 			from => {
-				if (this.dragAndDrop) return;
-				if (!this.hoveredSprite) return;
+				if (this.dragAndDrop) return true;
+				if (!this.hoveredSprite) return false;
 				const system = this.dragDropSystemSource(this.hoveredSprite);
-				if (!system) return;
+				if (!system) return false;
 				this.dragAndDrop = {
 					sprite: this.hoveredSprite,
 					system,
 					lastPosition: { x: NaN, y: NaN },
 				};
+				return true;
 			},
 			(from, to) => {
-				if (!this.dragAndDrop) return;
+				if (!this.dragAndDrop) return false;
 				this.dragAndDrop.system.drop(from, to, this.cursor);
 				this.dragAndDrop = undefined;
+				return true;
 			}
 		);
 	}
